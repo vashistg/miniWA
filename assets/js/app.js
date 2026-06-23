@@ -154,6 +154,10 @@ window.connect = function () {
     renderSidebar()
   })
 
+  channel.on("typing", ({from, conv_id}) => {
+    showTyping(from, conv_id)
+  })
+
   channel.on("removed_from_group", ({group_id}) => {
     const name = myGroups.get(group_id)?.name || group_id
     myGroups.delete(group_id)
@@ -256,6 +260,7 @@ function openConversation(id, type) {
 
   // Show "Add member" button only for groups
   $("add-member-btn").style.display = type === "group" ? "inline-block" : "none"
+  clearTyping()
 
   const msgs = loadMessages(id)
   if (msgs.length === 0) {
@@ -498,10 +503,46 @@ window.submitAddMember = function () {
     .receive("error", r => log(`Add member failed: ${JSON.stringify(r)}`, "error"))
 }
 
+// ─── Typing indicator ─────────────────────────────────────────────────────────
+const typingClearTimers = new Map()   // conv_id → setTimeout handle
+let lastTypingSent      = 0           // throttle: last time we sent a typing event
+
+function showTyping(from, convId) {
+  if (activeConv !== convId) return
+  const indicator = $("typing-indicator")
+  $("typing-text").textContent = `${from} is typing`
+  indicator.style.display = "flex"
+
+  // Auto-clear after 3s — reset if a new event arrives before then
+  if (typingClearTimers.has(convId)) clearTimeout(typingClearTimers.get(convId))
+  typingClearTimers.set(convId, setTimeout(() => {
+    if (activeConv === convId) indicator.style.display = "none"
+    typingClearTimers.delete(convId)
+  }, 3000))
+}
+
+function clearTyping() {
+  $("typing-indicator").style.display = "none"
+  typingClearTimers.forEach(t => clearTimeout(t))
+  typingClearTimers.clear()
+}
+
 // ─── Keyboard ─────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
   $("msg-input")?.addEventListener("keydown", e => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); window.sendMessage() }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); window.sendMessage(); return }
+
+    // Throttle: send at most 1 typing event every 2s
+    if (!channel || !activeConv) return
+    const now = Date.now()
+    if (now - lastTypingSent < 2000) return
+    lastTypingSent = now
+
+    if (activeConvType === "group") {
+      channel.push("typing", {group_id: activeConv})
+    } else {
+      channel.push("typing", {to: activeConv})
+    }
   })
   $("username-input")?.addEventListener("keydown", e => {
     if (e.key === "Enter") window.connect()

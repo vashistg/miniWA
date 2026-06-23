@@ -48,6 +48,8 @@ defmodule MiniWa.Application do
         type: :worker,
         restart: :permanent
       },
+      # Fan-out worker pool — used by Consumer for concurrent group message delivery
+      {Task.Supervisor, name: MiniWa.FanOut.Supervisor},
       # Kafka consumer — reads messages topic, writes ScyllaDB, delivers to Sessions
       MiniWa.Streaming.Consumer,
       MiniWaWeb.Endpoint

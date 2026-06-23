@@ -40,6 +40,9 @@ defmodule MiniWaWeb.MessageChannel do
       # Subscribe this channel process to presence broadcasts from all users
       Phoenix.PubSub.subscribe(MiniWa.PubSub, "presence")
 
+      # Subscribe to typing events addressed to this user (1:1 path)
+      Phoenix.PubSub.subscribe(MiniWa.PubSub, "typing:user:#{user_id}")
+
       # Broadcast to everyone already connected that this user is now online
       Phoenix.PubSub.broadcast(MiniWa.PubSub, "presence", {:presence_join, user_id})
       Logger.info("[Channel][#{user_id}] Broadcasted presence_join")
@@ -49,6 +52,11 @@ defmodule MiniWaWeb.MessageChannel do
         {:ok, g} -> g
         {:error, _} -> []
       end
+
+      # Subscribe to typing events for every group this user belongs to
+      Enum.each(groups, fn %{group_id: gid} ->
+        Phoenix.PubSub.subscribe(MiniWa.PubSub, "typing:group:#{gid}")
+      end)
 
       Logger.info("[Channel][#{user_id}] users=#{length(users)} groups=#{length(groups)}")
       {:ok, %{users: users, groups: groups}, socket}
@@ -117,6 +125,22 @@ defmodule MiniWaWeb.MessageChannel do
     user_id = socket.assigns.user_id
     Logger.info("[Channel][#{user_id}] send_group_msg → group=#{group_id}")
     Session.send_group_message(user_id, group_id, content, client_id)
+    {:noreply, socket}
+  end
+
+  # Typing indicator — ephemeral, no Kafka/ScyllaDB, pure PubSub.
+  # conv_id must match what the RECIPIENT has as activeConv:
+  #   1:1   → recipient's activeConv = sender's user_id  → conv_id = from
+  #   group → everyone's activeConv  = group_id          → conv_id = group_id
+  def handle_in("typing", %{"to" => to}, socket) do
+    from = socket.assigns.user_id
+    Phoenix.PubSub.broadcast(MiniWa.PubSub, "typing:user:#{to}", {:typing, from, from})
+    {:noreply, socket}
+  end
+
+  def handle_in("typing", %{"group_id" => group_id}, socket) do
+    from = socket.assigns.user_id
+    Phoenix.PubSub.broadcast(MiniWa.PubSub, "typing:group:#{group_id}", {:typing, from, group_id})
     {:noreply, socket}
   end
 
@@ -220,15 +244,26 @@ defmodule MiniWaWeb.MessageChannel do
     {:noreply, socket}
   end
 
+  # Typing indicator received via PubSub — forward to client, skip own events
+  def handle_info({:typing, from, conv_id}, socket) do
+    if from != socket.assigns.user_id do
+      push(socket, "typing", %{from: from, conv_id: conv_id})
+    end
+    {:noreply, socket}
+  end
+
   # Group invite — push to client so sidebar updates immediately
   def handle_info({:group_invite, group}, socket) do
     push(socket, "group_invite", group)
+    # Also subscribe to typing events for the new group
+    Phoenix.PubSub.subscribe(MiniWa.PubSub, "typing:group:#{group.group_id}")
     {:noreply, socket}
   end
 
   # Removed from group — push so sidebar drops it immediately
   def handle_info({:removed_from_group, %{group_id: group_id}}, socket) do
     push(socket, "removed_from_group", %{group_id: group_id})
+    Phoenix.PubSub.unsubscribe(MiniWa.PubSub, "typing:group:#{group_id}")
     {:noreply, socket}
   end
 

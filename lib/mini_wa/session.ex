@@ -61,65 +61,67 @@ defmodule MiniWa.Session do
     {:reply, :ok, %{state | channel_pid: channel_pid}}
   end
 
-  # Alice sends a message to Bob
+  # 1:1 send — three steps in order:
+  #   1. Registry lookup (capture receiver pid NOW, before any async work)
+  #   2. Kafka publish → tick-1 (durability guarantee)
+  #   3. Direct cast to receiver if they were online at step 1
+  #
+  # Consumer role is now persistence + offline queue only — it never delivers
+  # to online users.
   @impl true
   def handle_cast({:send_message, to_user_id, content, client_id}, state) do
     message_id = generate_id()
 
+    # Step 1 — snapshot receiver presence before the Kafka round-trip
+    receiver = Registry.lookup(MiniWa.Presence.Registry, to_user_id)
+
     Logger.info("""
     [Session][#{state.user_id}] ─────────── SEND ───────────────────────
       from       : #{state.user_id}
-      to         : #{to_user_id}
-      content    : "#{content}"
+      to         : #{to_user_id}  (#{if receiver == [], do: "OFFLINE", else: "ONLINE"})
       message_id : #{message_id}
       client_id  : #{client_id}
     ────────────────────────────────────────────────────────
     """)
 
     message = %{
-      id: message_id,
-      from: state.user_id,
-      to: to_user_id,
+      id:      message_id,
+      from:    state.user_id,
+      to:      to_user_id,
       content: content,
       client_id: client_id,
       sent_at: DateTime.utc_now() |> DateTime.to_iso8601()
     }
 
-    # ── Kafka write → tick-1 ────────────────────────────────────────────────
-    # Publish to Kafka synchronously. Broker ack = Kafka has it durably.
-    # Tick-1 goes to Alice the moment Kafka confirms — ScyllaDB write and
-    # delivery to Bob happen asynchronously in the Consumer.
-    Logger.info("[Session][#{state.user_id}] Publishing to Kafka | message_id=#{message_id}")
-
+    # Step 2 — Kafka publish → tick-1
     case MiniWa.Streaming.Producer.publish(message) do
       :ok ->
-        Logger.info("[Session][#{state.user_id}] ✓ Kafka confirmed — sending tick-1 to Alice")
         push_to_channel(state.channel_pid, {:tick1, message})
+
+        # Step 3 — direct delivery to online receiver (hot path)
+        case receiver do
+          [{pid, _}] ->
+            Logger.info("[Session][#{state.user_id}] → direct cast to #{to_user_id}.Session")
+            GenServer.cast(pid, {:deliver, message})
+          [] ->
+            Logger.info("[Session][#{state.user_id}] #{to_user_id} offline — Consumer will queue")
+        end
+
         {:noreply, %{state | in_flight: Map.put(state.in_flight, message_id, message)}}
 
       {:error, reason} ->
-        Logger.error("""
-        [Session][#{state.user_id}] ✗ Kafka publish FAILED — NOT sending tick-1
-          reason     : #{inspect(reason)}
-          message_id : #{message_id}
-          Is Kafka running? Check docker-compose logs.
-        """)
+        Logger.error("[Session][#{state.user_id}] ✗ Kafka publish FAILED | #{inspect(reason)}")
         {:noreply, state}
     end
   end
 
-  # Group message — publish to Kafka, Consumer handles member fan-out
+  # Group send — Kafka only. Session stays unblocked.
+  # Consumer owns fan-out for all groups (concurrent via Task.async_stream).
   @impl true
   def handle_cast({:send_group_message, group_id, content, client_id}, state) do
     message_id = generate_id()
 
-    Logger.info("""
-    [Session][#{state.user_id}] ─── GROUP SEND ───────────────────────
-      from       : #{state.user_id}
-      group      : #{group_id}
-      content    : "#{content}"
-      message_id : #{message_id}
-    """)
+    Logger.info("[Session][#{state.user_id}] group send | group=#{group_id} id=#{message_id}")
 
     message = %{
       id:              message_id,
@@ -134,12 +136,11 @@ defmodule MiniWa.Session do
 
     case MiniWa.Streaming.Producer.publish(message) do
       :ok ->
-        Logger.info("[Session][#{state.user_id}] ✓ Group message in Kafka — sending tick-1")
         push_to_channel(state.channel_pid, {:tick1, message})
         {:noreply, %{state | in_flight: Map.put(state.in_flight, message_id, message)}}
 
       {:error, reason} ->
-        Logger.error("[Session][#{state.user_id}] ✗ Kafka publish failed: #{inspect(reason)}")
+        Logger.error("[Session][#{state.user_id}] ✗ Kafka publish failed | #{inspect(reason)}")
         {:noreply, state}
     end
   end

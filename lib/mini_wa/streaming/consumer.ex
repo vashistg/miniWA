@@ -116,71 +116,72 @@ defmodule MiniWa.Streaming.Consumer do
     }
   end
 
-  # 1:1 message: write to ScyllaDB + deliver or queue for single recipient
+  # 1:1: write to ScyllaDB + queue if offline.
+  # Delivery to online recipients is handled by the sender's Session (direct cast).
   defp process_1to1(payload) do
     message = build_message(payload)
 
-    Logger.info("""
-    [Kafka][Consumer] ─── 1:1 ──────────────────────
-      id      : #{message.id}
-      from→to : #{message.from} → #{message.to}
-    """)
+    Logger.info("[Kafka][Consumer] 1:1 persist | id=#{message.id} from=#{message.from} to=#{message.to}")
 
-    recipients        = Registry.lookup(MiniWa.Presence.Registry, message.to)
-    recipient_online? = recipients != []
+    recipient_online? = Registry.lookup(MiniWa.Presence.Registry, message.to) != []
 
     case MiniWa.DB.persist_message(message, recipient_online?) do
       :ok ->
-        case recipients do
-          [{pid, _}] ->
-            Logger.info("[Kafka][Consumer] → #{message.to}.Session (online)")
-            GenServer.cast(pid, {:deliver, message})
-          [] ->
-            Logger.info("[Kafka][Consumer] #{message.to} offline — queued")
+        if recipient_online? do
+          Logger.info("[Kafka][Consumer] #{message.to} online — Session already delivered, skipping queue")
+        else
+          Logger.info("[Kafka][Consumer] #{message.to} offline — queued in ScyllaDB")
         end
       {:error, reason} ->
         Logger.error("[Kafka][Consumer] ✗ ScyllaDB write failed | #{inspect(reason)}")
     end
   end
 
-  # Group message: write once to ScyllaDB, then fan-out to every member
+  # Group: write once to ScyllaDB, then fan-out concurrently to all members.
+  # Delivers to online members directly; queues offline members in ScyllaDB.
+  # Task.async_stream runs up to @fan_out_concurrency deliveries in parallel,
+  # so 1000 members at 50 concurrency = ~20 rounds instead of 1000 sequential ops.
+  @fan_out_concurrency 50
+
   defp process_group(payload) do
     message  = build_message(payload)
     group_id = message.conversation_id
 
-    Logger.info("""
-    [Kafka][Consumer] ─── GROUP ────────────────────
-      id      : #{message.id}
-      from    : #{message.from}
-      group   : #{group_id}
-    """)
+    Logger.info("[Kafka][Consumer] group persist | id=#{message.id} group=#{group_id}")
 
-    # Write to messages table once for the whole group
-    case MiniWa.DB.persist_group_message(message) do
-      :ok ->
-        Logger.info("[Kafka][Consumer] ✓ Group message written | id=#{message.id}")
+    with :ok <- MiniWa.DB.persist_group_message(message),
+         {:ok, members} <- MiniWa.DB.list_group_members(group_id) do
 
-        # Fan-out: deliver or queue for every member except the sender
-        case MiniWa.DB.list_group_members(group_id) do
-          {:ok, members} ->
-            Enum.each(members, fn %{user_id: uid} ->
-              if uid != message.from do
-                case Registry.lookup(MiniWa.Presence.Registry, uid) do
-                  [{pid, _}] ->
-                    Logger.info("[Kafka][Consumer] Group → #{uid}.Session (online)")
-                    GenServer.cast(pid, {:deliver, message})
-                  [] ->
-                    Logger.info("[Kafka][Consumer] Group → #{uid} offline, queuing")
-                    MiniWa.DB.queue_undelivered_for_member(uid, message)
-                end
-              end
-            end)
-          {:error, reason} ->
-            Logger.error("[Kafka][Consumer] Failed to fetch group members: #{inspect(reason)}")
-        end
+      recipients = Enum.reject(members, fn %{user_id: uid} -> uid == message.from end)
+      Logger.info("[Kafka][Consumer] fanning out to #{length(recipients)} member(s) | id=#{message.id}")
 
+      Task.Supervisor.async_stream_nolink(
+        MiniWa.FanOut.Supervisor,
+        recipients,
+        fn %{user_id: uid} -> deliver_to_member(uid, message) end,
+        max_concurrency: @fan_out_concurrency,
+        timeout:         10_000,
+        on_timeout:      :kill_task
+      )
+      |> Stream.each(fn
+        {:ok, _}        -> :ok
+        {:exit, reason} -> Logger.error("[Kafka][Consumer] fan-out task failed: #{inspect(reason)}")
+      end)
+      |> Stream.run()
+
+      Logger.info("[Kafka][Consumer] ✓ fan-out complete | id=#{message.id}")
+    else
       {:error, reason} ->
-        Logger.error("[Kafka][Consumer] ✗ Group message write failed | #{inspect(reason)}")
+        Logger.error("[Kafka][Consumer] ✗ group processing failed | #{inspect(reason)}")
+    end
+  end
+
+  defp deliver_to_member(uid, message) do
+    case Registry.lookup(MiniWa.Presence.Registry, uid) do
+      [{pid, _}] ->
+        GenServer.cast(pid, {:deliver, message})
+      [] ->
+        MiniWa.DB.queue_undelivered_for_member(uid, message)
     end
   end
 end
