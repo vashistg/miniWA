@@ -1,0 +1,134 @@
+<%!-- Login screen --%>
+<div id="login-screen" class="login-screen">
+  <div class="login-card">
+    <div class="logo">
+      <span class="logo-icon">💬</span>
+      <span class="logo-text">miniWA</span>
+    </div>
+    <p class="login-sub">A WhatsApp-scale 1:1 chat on BEAM</p>
+    <input id="username-input" class="input-field" type="text"
+           placeholder="Your username (e.g. alice)" autofocus />
+    <button class="btn-connect" onclick="window.connect()">Connect</button>
+    <p class="login-hint">Open a second tab and connect as a different user to chat</p>
+  </div>
+</div>
+
+<%!-- Chat screen --%>
+<div id="chat-screen" class="chat-screen" style="display:none">
+
+  <%!-- Top bar --%>
+  <div class="topbar">
+    <span class="topbar-logo">💬 miniWA</span>
+    <span class="topbar-user">Connected as <strong id="display-name"></strong></span>
+    <span class="topbar-stack">Elixir · OTP · ScyllaDB · Kafka</span>
+    <button class="log-toggle-btn" onclick="window.toggleLog()" title="Toggle event log">
+      📋 Log
+    </button>
+  </div>
+
+  <%!-- Main body --%>
+  <div class="chat-body">
+
+    <%!-- Sidebar --%>
+    <div class="sidebar">
+      <div class="sidebar-header">
+        Chats
+        <button class="new-group-btn" onclick="window.openCreateGroupModal()" title="New group">＋</button>
+      </div>
+      <div id="conversation-list" class="conversation-list"></div>
+    </div>
+
+    <%!-- Messages panel --%>
+    <div class="messages-panel">
+      <div class="panel-header" id="chat-header">
+        <span id="chat-with">Select a conversation</span>
+        <button id="add-member-btn" class="add-member-btn" style="display:none"
+                onclick="window.openManageMembersModal()">Members</button>
+      </div>
+      <div id="messages" class="messages">
+        <div class="no-conversation">← Select someone to start chatting</div>
+      </div>
+      <div class="composer">
+        <input id="msg-input" class="input-field msg-field"
+               type="text" placeholder="Type a message…" />
+        <button class="btn-send" onclick="window.sendMessage()">Send →</button>
+      </div>
+    </div>
+
+    <%!-- Collapsible event log --%>
+    <div id="log-panel" class="log-panel">
+      <div class="panel-header">
+        Event Log
+        <span class="panel-header-sub"> — message path through BEAM</span>
+      </div>
+      <div id="event-log" class="event-log"></div>
+      <div class="log-legend">
+        <span class="log-send">→ sent</span>
+        <span class="log-recv">← recv</span>
+        <span class="log-tick">⟳ tick</span>
+        <span class="log-system">◆ sys</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<%!-- ── Create Group Modal ── --%>
+<div id="create-group-modal" class="modal-overlay" style="display:none" onclick="window.closeCreateGroupModal(event)">
+  <div class="dialog" onclick="event.stopPropagation()">
+    <div class="dialog-header">
+      <span>New Group</span>
+      <button class="dialog-close" onclick="window.closeCreateGroupModal()">✕</button>
+    </div>
+    <div class="dialog-body">
+      <label class="dialog-label">Group name</label>
+      <input id="group-name-input" class="input-field" type="text" placeholder="e.g. Team Chat" />
+
+      <label class="dialog-label" style="margin-top:14px">Add members</label>
+      <div id="group-member-checkboxes" class="member-checkbox-list"></div>
+    </div>
+    <div class="dialog-footer">
+      <button class="btn-connect" onclick="window.submitCreateGroup()">Create Group</button>
+    </div>
+  </div>
+</div>
+
+<%!-- ── Manage Members Modal ── --%>
+<div id="manage-members-modal" class="modal-overlay" style="display:none" onclick="window.closeManageMembersModal(event)">
+  <div class="dialog" onclick="event.stopPropagation()">
+    <div class="dialog-header">
+      <span>Manage Members</span>
+      <button class="dialog-close" onclick="window.closeManageMembersModal()">✕</button>
+    </div>
+    <div class="dialog-body">
+
+      <%!-- Current members --%>
+      <label class="dialog-label">Current members</label>
+      <div id="current-members-list" class="member-checkbox-list"></div>
+
+      <div class="dialog-divider"></div>
+
+      <%!-- Add new member --%>
+      <label class="dialog-label">Add member</label>
+      <div id="add-member-list" class="member-checkbox-list"></div>
+
+      <label class="dialog-label" style="margin-top:14px">Share history from</label>
+      <div class="share-history-options">
+        <label class="radio-option">
+          <input type="radio" name="share-history" value="all" checked /> From the beginning
+        </label>
+        <label class="radio-option">
+          <input type="radio" name="share-history" value="now" /> From now (no history)
+        </label>
+        <label class="radio-option">
+          <input type="radio" name="share-history" value="custom" /> Custom date
+        </label>
+      </div>
+      <input id="share-from-date" class="input-field" type="datetime-local"
+             style="display:none; margin-top:8px" />
+    </div>
+    <div class="dialog-footer">
+      <button class="btn-connect" onclick="window.submitAddMember()">Add to Group</button>
+    </div>
+  </div>
+</div>

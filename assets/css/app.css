@@ -1,0 +1,586 @@
+/* See the Tailwind configuration guide for advanced usage
+   https://tailwindcss.com/docs/configuration */
+
+@import "tailwindcss" source(none);
+@import "phoenix-colocated/mini_wa/colocated.css";
+@source "../css";
+@source "../js";
+@source "../../lib/mini_wa_web";
+/* Required for Tailwind to automatically pick up changes in colocated CSS files in dev */
+@source "../../_build/dev/phoenix-colocated/mini_wa/*/";
+
+/* A Tailwind plugin that makes "hero-#{ICON}" classes available.
+   The heroicons installation itself is managed by your mix.exs */
+@plugin "../vendor/heroicons";
+
+/* daisyUI Tailwind Plugin. You can update this file by fetching the latest version with:
+   curl -sLO https://github.com/saadeghi/daisyui/releases/latest/download/daisyui.js
+   Make sure to look at the daisyUI changelog: https://daisyui.com/docs/changelog/ */
+@plugin "../vendor/daisyui" {
+  themes: false;
+}
+
+/* daisyUI theme plugin. You can update this file by fetching the latest version with:
+  curl -sLO https://github.com/saadeghi/daisyui/releases/latest/download/daisyui-theme.js
+  We ship with two themes, a light one inspired on Phoenix colors and a dark one inspired
+  on Elixir colors. Build your own at: https://daisyui.com/theme-generator/ */
+@plugin "../vendor/daisyui-theme" {
+  name: "dark";
+  default: false;
+  prefersdark: true;
+  color-scheme: "dark";
+  --color-base-100: oklch(30.33% 0.016 252.42);
+  --color-base-200: oklch(25.26% 0.014 253.1);
+  --color-base-300: oklch(20.15% 0.012 254.09);
+  --color-base-content: oklch(97.807% 0.029 256.847);
+  --color-primary: oklch(58% 0.233 277.117);
+  --color-primary-content: oklch(96% 0.018 272.314);
+  --color-secondary: oklch(58% 0.233 277.117);
+  --color-secondary-content: oklch(96% 0.018 272.314);
+  --color-accent: oklch(60% 0.25 292.717);
+  --color-accent-content: oklch(96% 0.016 293.756);
+  --color-neutral: oklch(37% 0.044 257.287);
+  --color-neutral-content: oklch(98% 0.003 247.858);
+  --color-info: oklch(58% 0.158 241.966);
+  --color-info-content: oklch(97% 0.013 236.62);
+  --color-success: oklch(60% 0.118 184.704);
+  --color-success-content: oklch(98% 0.014 180.72);
+  --color-warning: oklch(66% 0.179 58.318);
+  --color-warning-content: oklch(98% 0.022 95.277);
+  --color-error: oklch(58% 0.253 17.585);
+  --color-error-content: oklch(96% 0.015 12.422);
+  --radius-selector: 0.25rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.21875rem;
+  --size-field: 0.21875rem;
+  --border: 1.5px;
+  --depth: 1;
+  --noise: 0;
+}
+
+@plugin "../vendor/daisyui-theme" {
+  name: "light";
+  default: true;
+  prefersdark: false;
+  color-scheme: "light";
+  --color-base-100: oklch(98% 0 0);
+  --color-base-200: oklch(96% 0.001 286.375);
+  --color-base-300: oklch(92% 0.004 286.32);
+  --color-base-content: oklch(21% 0.006 285.885);
+  --color-primary: oklch(70% 0.213 47.604);
+  --color-primary-content: oklch(98% 0.016 73.684);
+  --color-secondary: oklch(55% 0.027 264.364);
+  --color-secondary-content: oklch(98% 0.002 247.839);
+  --color-accent: oklch(0% 0 0);
+  --color-accent-content: oklch(100% 0 0);
+  --color-neutral: oklch(44% 0.017 285.786);
+  --color-neutral-content: oklch(98% 0 0);
+  --color-info: oklch(62% 0.214 259.815);
+  --color-info-content: oklch(97% 0.014 254.604);
+  --color-success: oklch(70% 0.14 182.503);
+  --color-success-content: oklch(98% 0.014 180.72);
+  --color-warning: oklch(66% 0.179 58.318);
+  --color-warning-content: oklch(98% 0.022 95.277);
+  --color-error: oklch(58% 0.253 17.585);
+  --color-error-content: oklch(96% 0.015 12.422);
+  --radius-selector: 0.25rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.21875rem;
+  --size-field: 0.21875rem;
+  --border: 1.5px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* Add variants based on LiveView classes */
+@custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
+@custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
+@custom-variant phx-change-loading (.phx-change-loading&, .phx-change-loading &);
+
+/* Use the data attribute for dark mode  */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* Make LiveView wrapper divs transparent for layout */
+[data-phx-session], [data-phx-teleported-src] { display: contents }
+
+/* ── miniWA Chat UI ────────────────────────────────────────────────────── */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+/* ── Login Screen ── */
+.login-screen {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f2f5;
+}
+
+.login-card {
+  background: #ffffff;
+  color: #111111;
+  border-radius: 12px;
+  padding: 40px 48px;
+  width: 380px;
+  text-align: center;
+  box-shadow: 0 2px 16px rgba(0,0,0,.1);
+}
+
+.logo { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 6px; }
+.logo-icon { font-size: 32px; }
+.logo-text { font-size: 28px; font-weight: 700; color: #111; }
+.login-sub { color: #888; margin: 0 0 24px; font-size: 13px; }
+.login-hint { color: #aaa; margin-top: 14px; font-size: 12px; }
+
+.input-field {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color .15s;
+  background-color: #ffffff;
+  color: #111111;
+}
+.input-field:focus { border-color: #25d366; }
+.input-field::placeholder { color: #aaaaaa; }
+
+.btn-connect {
+  margin-top: 12px;
+  width: 100%;
+  padding: 11px;
+  background: #25d366;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-connect:hover { background: #1da851; }
+
+/* ── Chat Screen ── */
+.chat-screen {
+  height: 100vh;
+  flex-direction: column;
+  background: #f0f2f5;
+}
+
+/* ── Top bar ── */
+.topbar {
+  background: #25d366;
+  color: #fff;
+  padding: 0 20px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.topbar-logo  { font-size: 18px; font-weight: 700; }
+.topbar-user  { font-size: 14px; flex: 1; }
+.topbar-stack { font-size: 11px; opacity: .75; background: rgba(0,0,0,.12); padding: 3px 10px; border-radius: 20px; }
+
+.log-toggle-btn {
+  padding: 5px 12px;
+  background: rgba(0,0,0,.15);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.3);
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s;
+}
+.log-toggle-btn:hover { background: rgba(0,0,0,.25); }
+
+/* ── Chat body ── */
+.chat-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  background: #e0e0e0;
+  gap: 1px;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #e0e0e0;
+}
+
+.sidebar-header {
+  padding: 14px 16px;
+  font-weight: 700;
+  font-size: 16px;
+  color: #111;
+  border-bottom: 1px solid #eee;
+  flex-shrink: 0;
+}
+
+.conversation-list { flex: 1; overflow-y: auto; }
+
+.sidebar-empty {
+  padding: 20px 16px;
+  font-size: 13px;
+  color: #bbb;
+  font-style: italic;
+}
+
+.conv-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid #f5f5f5;
+  transition: background .12s;
+  position: relative;
+}
+.conv-item:hover   { background: #f5f5f5; }
+.conv-item.active  { background: #e8f5e9; border-left: 3px solid #25d366; }
+
+.conv-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #25d366;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.conv-info    { flex: 1; min-width: 0; }
+.conv-name    { font-weight: 600; font-size: 14px; color: #111; }
+.conv-status  { font-size: 11px; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.conv-status.online  { color: #4caf50; }
+.conv-status.offline { color: #aaa; }
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.conv-status.online  .status-dot { background: #4caf50; }
+.conv-status.offline .status-dot { background: #bdbdbd; }
+
+.unread-badge {
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: #25d366;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+}
+
+/* ── Messages panel ── */
+.messages-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  min-width: 0;
+}
+
+.panel-header {
+  padding: 10px 16px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #555;
+  background: #fafafa;
+  border-bottom: 1px solid #eee;
+  flex-shrink: 0;
+}
+.panel-header-sub { font-weight: 400; color: #aaa; }
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.no-conversation {
+  margin: auto;
+  color: #bbb;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Message rows */
+.msg-row { display: flex; }
+.msg-row.outgoing { justify-content: flex-end; }
+.msg-row.incoming { justify-content: flex-start; }
+
+.bubble {
+  max-width: 70%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.outgoing .bubble { background: #dcf8c6; border-bottom-right-radius: 3px; }
+.incoming .bubble { background: #fff; border: 1px solid #eee; border-bottom-left-radius: 3px; }
+
+.msg-meta    { font-size: 11px; font-weight: 600; color: #25d366; }
+.msg-content { font-size: 14px; color: #111; word-break: break-word; }
+
+.ticks { font-size: 12px; text-align: right; }
+.ticks.pending { color: #aaa; }
+.ticks.tick1   { color: #aaa; }
+.ticks.tick2   { color: #aaa; }
+.ticks.tick3   { color: #4fc3f7; }
+
+/* Composer */
+.composer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #f0f2f5;
+  border-top: 1px solid #ddd;
+  flex-shrink: 0;
+}
+.msg-field  { flex: 1; }
+.btn-send {
+  padding: 10px 18px;
+  background: #25d366;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-send:hover { background: #1da851; }
+
+/* ── Event Log panel ── */
+.log-panel {
+  width: 360px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  transition: width .25s ease, opacity .25s ease;
+  overflow: hidden;
+}
+.log-panel.collapsed {
+  width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.event-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+  font-family: "JetBrains Mono", "Fira Code", "Courier New", monospace;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.log-line    { padding: 1px 0; white-space: pre-wrap; word-break: break-all; }
+.log-send    { color: #89dceb; }
+.log-recv    { color: #a6e3a1; }
+.log-tick    { color: #fab387; }
+.log-system  { color: #7f849c; }
+.log-success { color: #a6e3a1; font-weight: 600; }
+.log-error   { color: #f38ba8; }
+
+.log-legend {
+  display: flex;
+  gap: 12px;
+  padding: 6px 12px;
+  font-size: 11px;
+  border-top: 1px solid #313244;
+  flex-shrink: 0;
+}
+.log-legend .log-send   { color: #89dceb; }
+.log-legend .log-recv   { color: #a6e3a1; }
+.log-legend .log-tick   { color: #fab387; }
+.log-legend .log-system { color: #7f849c; }
+
+/* ─── Sidebar extras ──────────────────────────────────────────────────────── */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #a6adc8;
+  border-bottom: 1px solid #313244;
+  flex-shrink: 0;
+}
+.new-group-btn {
+  background: none;
+  border: none;
+  color: #89b4fa;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.new-group-btn:hover { color: #cba6f7; }
+
+.group-avatar {
+  background: #cba6f7 !important;
+  color: #1e1e2e !important;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* ─── Panel header add-member button ─────────────────────────────────────── */
+.add-member-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  background: #313244;
+  border: none;
+  border-radius: 6px;
+  color: #cdd6f4;
+  cursor: pointer;
+  margin-left: auto;
+}
+.add-member-btn:hover { background: #45475a; }
+
+/* ─── Modal overlay ──────────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.dialog {
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  border-radius: 12px;
+  width: 360px;
+  max-width: 95vw;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0,0,0,.6);
+}
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #cdd6f4;
+  border-bottom: 1px solid #313244;
+}
+.dialog-close {
+  background: none;
+  border: none;
+  color: #6c7086;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.dialog-close:hover { color: #f38ba8; }
+.dialog-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+}
+.dialog-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #a6adc8;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 8px;
+}
+.dialog-footer {
+  padding: 12px 20px 18px;
+  border-top: 1px solid #313244;
+}
+.dialog-footer .btn-connect { width: 100%; }
+
+/* ─── Checkbox / radio lists inside modals ───────────────────────────────── */
+.member-checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.checkbox-option,
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #cdd6f4;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.checkbox-option:hover,
+.radio-option:hover { background: #313244; }
+
+.share-history-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dialog-divider {
+  border: none;
+  border-top: 1px solid #313244;
+  margin: 16px 0;
+}
+
+.member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+.member-row:hover { background: #313244; }
+.member-name { font-size: 14px; color: #cdd6f4; }
+.btn-remove {
+  font-size: 11px;
+  padding: 3px 8px;
+  background: #3b1a1a;
+  border: 1px solid #f38ba822;
+  border-radius: 5px;
+  color: #f38ba8;
+  cursor: pointer;
+}
+.btn-remove:hover { background: #5c2020; }
