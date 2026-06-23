@@ -8,7 +8,7 @@ defmodule MiniWaWeb.AnalyticsController do
   end
 
   def data(conn, _params) do
-    json(conn, MiniWa.Analytics.Store.get_snapshot())
+    json(conn, MiniWa.Cluster.aggregate_analytics())
   end
 
   def hourly(conn, params) do

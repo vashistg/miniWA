@@ -169,9 +169,9 @@ defmodule MiniWaWeb.MessageChannel do
     case MiniWa.DB.remove_group_member(group_id, uid) do
       :ok ->
         # Notify the removed user if they're online so their sidebar updates
-        case Registry.lookup(MiniWa.Presence.Registry, uid) do
-          [{pid, _}] -> send(pid, {:removed_from_group, %{group_id: group_id}})
-          [] -> :offline
+        case MiniWa.Cluster.find_session(uid) do
+          {:ok, pid} -> send(pid, {:removed_from_group, %{group_id: group_id}})
+          :not_found -> :offline
         end
         {:reply, :ok, socket}
       {:error, reason} ->
@@ -347,21 +347,21 @@ defmodule MiniWaWeb.MessageChannel do
   end
 
   defp online_user_ids do
-    Registry.select(MiniWa.Presence.Registry, [{{:"$1", :"$2", :"$3"}, [], [:"$1"]}])
+    MiniWa.Cluster.online_users()
   end
 
-  # Notify a user of a group invite via their Session process (if online)
+  # Notify a user of a group invite via their Session process (if online, any node)
   defp notify_group_invite(uid, group_id, group_name, invited_by) do
-    case Registry.lookup(MiniWa.Presence.Registry, uid) do
-      [{pid, _}] -> send(pid, {:group_invite, %{group_id: group_id, name: group_name, invited_by: invited_by}})
-      []         -> :offline
+    case MiniWa.Cluster.find_session(uid) do
+      {:ok, pid} -> send(pid, {:group_invite, %{group_id: group_id, name: group_name, invited_by: invited_by}})
+      :not_found -> :offline
     end
   end
 
-  # If a newly-added member is online, push their history share directly
+  # If a newly-added member is online (any node), push their history share directly
   defp push_history_to_member(uid, group_id, since_ms) do
-    case {Registry.lookup(MiniWa.Presence.Registry, uid), MiniWa.DB.fetch_group_history(group_id, since_ms)} do
-      {[{pid, _}], {:ok, messages}} ->
+    case {MiniWa.Cluster.find_session(uid), MiniWa.DB.fetch_group_history(group_id, since_ms)} do
+      {{:ok, pid}, {:ok, messages}} ->
         Logger.info("[Channel] Pushing #{length(messages)} historical messages to #{uid}")
         Enum.each(messages, fn m -> GenServer.cast(pid, {:deliver, m}) end)
       _ ->

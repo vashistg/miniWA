@@ -66,7 +66,8 @@ defmodule MiniWa.MixProject do
       {:ex_aws, "~> 2.5"},
       {:ex_aws_s3, "~> 2.5"},
       {:hackney, "~> 1.20"},
-      {:sweet_xml, "~> 0.7"}
+      {:sweet_xml, "~> 0.7"},
+      {:libcluster, "~> 3.3"}
     ]
   end
 

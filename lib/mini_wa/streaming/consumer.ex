@@ -143,7 +143,7 @@ defmodule MiniWa.Streaming.Consumer do
 
     Logger.info("[Kafka][Consumer] 1:1 persist | id=#{message.id} from=#{message.from} to=#{message.to}")
 
-    recipient_online? = Registry.lookup(MiniWa.Presence.Registry, message.to) != []
+    recipient_online? = MiniWa.Cluster.online?(message.to)
 
     case MiniWa.DB.persist_message(message, recipient_online?) do
       :ok ->
@@ -170,7 +170,7 @@ defmodule MiniWa.Streaming.Consumer do
          {:ok, members} <- MiniWa.DB.list_group_members(group_id) do
 
       offline = Enum.reject(members, fn %{user_id: uid} ->
-        uid == message.from || Registry.lookup(MiniWa.Presence.Registry, uid) != []
+        uid == message.from || MiniWa.Cluster.online?(uid)
       end)
 
       Logger.info("[Kafka][Consumer] queuing for #{length(offline)} offline member(s) | id=#{message.id}")

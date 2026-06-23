@@ -31,11 +31,17 @@ defmodule MiniWa.Session do
   end
 
   def notify_delivered(sender_user_id, message_id) do
-    GenServer.cast(via(sender_user_id), {:recipient_delivered, message_id})
+    case MiniWa.Cluster.find_session(sender_user_id) do
+      {:ok, pid}  -> GenServer.cast(pid, {:recipient_delivered, message_id})
+      :not_found  -> :offline
+    end
   end
 
   def notify_read(sender_user_id, message_id) do
-    GenServer.cast(via(sender_user_id), {:recipient_read, message_id})
+    case MiniWa.Cluster.find_session(sender_user_id) do
+      {:ok, pid}  -> GenServer.cast(pid, {:recipient_read, message_id})
+      :not_found  -> :offline
+    end
   end
 
   # ─── Server Callbacks ──────────────────────────────────────────────────────
@@ -44,11 +50,12 @@ defmodule MiniWa.Session do
   def init(user_id) do
     Logger.info("""
     [Session][#{user_id}] ══════════════════════════════════════
-      GenServer STARTED  pid=#{inspect(self())}
-      Registered in Presence Registry (ETS) under key="#{user_id}"
+      GenServer STARTED  pid=#{inspect(self())}  node=#{Node.self()}
+      Registered in local Registry + cluster :pg group
     ══════════════════════════════════════════════════════════
     """)
 
+    :pg.join(MiniWa.SessionGroup, user_id, self())
     MiniWa.Analytics.Store.record_session_start()
     {:ok, %{user_id: user_id, channel_pid: nil, in_flight: %{}}}
   end
@@ -74,13 +81,15 @@ defmodule MiniWa.Session do
     message_id            = generate_id()
     kafka_published_at_ms = System.system_time(:millisecond)
 
-    # Step 1 — snapshot receiver presence before the Kafka round-trip
-    receiver = Registry.lookup(MiniWa.Presence.Registry, to_user_id)
+    # Step 1 — snapshot receiver presence before the Kafka round-trip.
+    # MiniWa.Cluster.find_session searches :pg across all connected nodes,
+    # so receiver_pid may be on a different Erlang node — cast still works.
+    receiver = MiniWa.Cluster.find_session(to_user_id)
 
     Logger.info("""
     [Session][#{state.user_id}] ─────────── SEND ───────────────────────
       from       : #{state.user_id}
-      to         : #{to_user_id}  (#{if receiver == [], do: "OFFLINE", else: "ONLINE"})
+      to         : #{to_user_id}  (#{if receiver == :not_found, do: "OFFLINE", else: "ONLINE"})
       message_id : #{message_id}
       client_id  : #{client_id}
     ────────────────────────────────────────────────────────
@@ -105,12 +114,13 @@ defmodule MiniWa.Session do
         push_to_channel(state.channel_pid, {:tick1, message})
         record_analytics(message)
 
-        # Step 3 — direct delivery to online receiver (hot path)
+        # Step 3 — direct delivery to online receiver (hot path).
+        # pid may be on a remote node; Erlang distribution makes the cast transparent.
         case receiver do
-          [{pid, _}] ->
-            Logger.info("[Session][#{state.user_id}] → direct cast to #{to_user_id}.Session")
+          {:ok, pid} ->
+            Logger.info("[Session][#{state.user_id}] → direct cast to #{to_user_id}.Session node=#{node(pid)}")
             GenServer.cast(pid, {:deliver, message})
-          [] ->
+          :not_found ->
             Logger.info("[Session][#{state.user_id}] #{to_user_id} offline — Consumer will queue")
         end
 

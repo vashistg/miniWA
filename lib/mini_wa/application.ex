@@ -11,11 +11,13 @@ defmodule MiniWa.Application do
 
     Logger.info("""
     [App] ══════════════════════════════════════════════════
-      miniWA starting up
+      miniWA starting up  node=#{Node.self()}
       Supervisor tree:
-        MiniWa.Presence.Registry    — ETS-backed presence (user_id → Session PID)
+        Cluster.Supervisor          — libcluster node discovery (Epmd strategy)
+        MiniWa.SessionGroup (:pg)   — cluster-wide session registry (gossip)
+        MiniWa.Presence.Registry    — ETS-backed presence (local, used for via/1)
         MiniWa.Session.Supervisor   — DynamicSupervisor (one Session per user)
-        MiniWa.Streaming.Consumer   — Kafka consumer → ScyllaDB + delivery
+        MiniWa.Streaming.Consumer   — Kafka consumer → ScyllaDB + offline queue
         MiniWa.Analytics.Supervisor — analytics consumer + metrics store + lag poller
         MiniWaWeb.Endpoint          — Phoenix WebSocket endpoint
     ══════════════════════════════════════════════════════
@@ -24,10 +26,15 @@ defmodule MiniWa.Application do
     kafka_brokers = Application.get_env(:mini_wa, MiniWa.Streaming, [])
                     |> Keyword.get(:kafka_brokers, [{"localhost", 9092}])
 
+    topologies = Application.get_env(:libcluster, :topologies, [])
+
     children = [
       MiniWaWeb.Telemetry,
-      {DNSCluster, query: Application.get_env(:mini_wa, :dns_cluster_query) || :ignore},
+      # libcluster — auto-connects nodes using the topology from config/dev.exs
+      {Cluster.Supervisor, [topologies, [name: MiniWa.ClusterSupervisor]]},
       {Phoenix.PubSub, name: MiniWa.PubSub},
+      # Named :pg scope — cluster-wide session registry; gossips across connected nodes
+      %{id: :pg_session_group, start: {:pg, :start_link, [MiniWa.SessionGroup]}},
       # Xandra connection pool → ScyllaDB
       {Xandra,
        nodes: Application.get_env(:mini_wa, MiniWa.DB, []) |> Keyword.get(:nodes, ["localhost:9042"]),

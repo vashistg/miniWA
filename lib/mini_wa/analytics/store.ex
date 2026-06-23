@@ -99,7 +99,7 @@ defmodule MiniWa.Analytics.Store do
       session_crashes: ets_val(:session_crashes),
       kafka_lag_main:      ets_val(:kafka_lag_main),
       kafka_lag_analytics: ets_val(:kafka_lag_analytics),
-      active_sessions: Registry.count(MiniWa.Presence.Registry),
+      active_sessions: length(MiniWa.Cluster.online_users()),
       latency:         compute_latency_stats(ets_val(:latency_samples)),
       rate:            compute_rate(ets_val(:rate_buckets))
     }
