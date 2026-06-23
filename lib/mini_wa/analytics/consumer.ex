@@ -20,7 +20,7 @@ defmodule MiniWa.Analytics.Consumer do
   def init(_) do
     # Small delay so the main consumer starts (and creates the topic) first.
     schedule_start(6_000)
-    {:ok, %{attempts: 0}}
+    {:ok, %{attempts: 0, subscriber_ref: nil}}
   end
 
   @impl true
@@ -36,9 +36,10 @@ defmodule MiniWa.Analytics.Consumer do
       message_type:    :message,
       consumer_config: [begin_offset: :latest]
     }) do
-      {:ok, _pid} ->
+      {:ok, pid} ->
+        ref = Process.monitor(pid)
         Logger.info("[Analytics][Consumer] ✓ Running | group=#{@group}")
-        {:noreply, %{state | attempts: 0}}
+        {:noreply, %{state | attempts: 0, subscriber_ref: ref}}
 
       {:error, reason} ->
         delay = min(5_000 * (attempts + 1), 30_000)
@@ -46,6 +47,14 @@ defmodule MiniWa.Analytics.Consumer do
         schedule_start(delay)
         {:noreply, %{state | attempts: attempts + 1}}
     end
+  end
+
+  # Subscriber crashed — restart it
+  @impl true
+  def handle_info({:DOWN, ref, :process, _pid, reason}, %{subscriber_ref: ref} = state) do
+    Logger.warning("[Analytics][Consumer] Subscriber crashed (#{inspect(reason)}) — restarting in 5s")
+    schedule_start(5_000)
+    {:noreply, %{state | subscriber_ref: nil}}
   end
 
   defp schedule_start(ms), do: Process.send_after(self(), :start_subscriber, ms)
@@ -58,25 +67,9 @@ defmodule MiniWa.Analytics.Consumer do
     {:ok, init_data}
   end
 
-  def handle_message({:kafka_message, _offset, _key, value, _ts_type, _ts, _headers}, state) do
-    case Jason.decode(value) do
-      {:ok, payload} -> record_metrics(payload)
-      {:error, _}    -> :ok
-    end
+  # Metrics are now recorded directly in the sender's Session at publish time.
+  # This consumer only commits offsets so Kafka lag stays current.
+  def handle_message(_msg, state) do
     {:ok, :commit, state}
-  end
-
-  # ─── Private ───────────────────────────────────────────────────────────────
-
-  defp record_metrics(payload) do
-    client_sent_at        = payload["client_sent_at"]
-    kafka_published_at_ms = payload["kafka_published_at_ms"]
-
-    latency_ms =
-      if is_integer(client_sent_at) && is_integer(kafka_published_at_ms) do
-        kafka_published_at_ms - client_sent_at
-      end
-
-    MiniWa.Analytics.Store.record_message(payload["media_type"], latency_ms)
   end
 end

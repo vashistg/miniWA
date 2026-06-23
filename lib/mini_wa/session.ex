@@ -103,6 +103,7 @@ defmodule MiniWa.Session do
     case MiniWa.Streaming.Producer.publish(message) do
       :ok ->
         push_to_channel(state.channel_pid, {:tick1, message})
+        record_analytics(message)
 
         # Step 3 — direct delivery to online receiver (hot path)
         case receiver do
@@ -148,6 +149,10 @@ defmodule MiniWa.Session do
     case MiniWa.Streaming.Producer.publish(message) do
       :ok ->
         push_to_channel(state.channel_pid, {:tick1, message})
+        record_analytics(message)
+        # Deliver immediately to all online group members via PubSub.
+        # Consumer handles persistence + offline queuing only.
+        Phoenix.PubSub.broadcast(MiniWa.PubSub, "group:#{group_id}", {:group_message, message})
         {:noreply, %{state | in_flight: Map.put(state.in_flight, message_id, message)}}
 
       {:error, reason} ->
@@ -261,6 +266,15 @@ defmodule MiniWa.Session do
   end
 
   defp push_to_channel(channel_pid, event), do: send(channel_pid, event)
+
+  defp record_analytics(message) do
+    latency_ms =
+      case {message.client_sent_at, message.kafka_published_at_ms} do
+        {cs, kp} when is_integer(cs) and is_integer(kp) -> kp - cs
+        _ -> nil
+      end
+    MiniWa.Analytics.Store.record_message(message.media_type, latency_ms)
+  end
 
   defp generate_id do
     # Time-ordered ID: 12-char hex timestamp (ms) + 8-char random suffix.

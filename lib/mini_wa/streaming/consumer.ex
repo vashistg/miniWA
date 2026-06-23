@@ -2,9 +2,11 @@ defmodule MiniWa.Streaming.Consumer do
   @moduledoc """
   Kafka group consumer for the "messages" topic.
 
-  For each message it:
-    1. Writes to ScyllaDB (durable log + undelivered queue if offline)
-    2. Delivers directly to recipient's Session if they are online
+  For each message it writes to ScyllaDB (durable log) and, for offline
+  recipients, adds an entry to the undelivered queue so drain_offline delivers
+  it on reconnect.  Real-time delivery to online users is handled upstream:
+  1:1 messages by the sender's Session (direct GenServer.cast), group messages
+  by the sender's Session via Phoenix.PubSub broadcast to "group:<group_id>".
   """
 
   use GenServer
@@ -25,7 +27,7 @@ defmodule MiniWa.Streaming.Consumer do
   @impl true
   def init(_) do
     schedule_start(3_000)
-    {:ok, %{attempts: 0}}
+    {:ok, %{attempts: 0, subscriber_ref: nil}}
   end
 
   @impl true
@@ -33,7 +35,7 @@ defmodule MiniWa.Streaming.Consumer do
     Logger.info("[Kafka][Consumer] Attempting to start subscriber (attempt #{attempts + 1})...")
 
     with :ok <- ensure_topic(),
-         {:ok, _pid} <- :brod_group_subscriber_v2.start_link(%{
+         {:ok, pid} <- :brod_group_subscriber_v2.start_link(%{
            client:          @client,
            group_id:        @group,
            topics:          [@topic],
@@ -42,8 +44,9 @@ defmodule MiniWa.Streaming.Consumer do
            message_type:    :message,
            consumer_config: [begin_offset: :latest]
          }) do
+      ref = Process.monitor(pid)
       Logger.info("[Kafka][Consumer] ✓ Group subscriber running | group=#{@group} topic=#{@topic}")
-      {:noreply, %{state | attempts: 0}}
+      {:noreply, %{state | attempts: 0, subscriber_ref: ref}}
     else
       {:error, reason} ->
         delay = min(5_000 * (attempts + 1), 30_000)
@@ -51,6 +54,14 @@ defmodule MiniWa.Streaming.Consumer do
         schedule_start(delay)
         {:noreply, %{state | attempts: attempts + 1}}
     end
+  end
+
+  # Subscriber died — restart it so delivery resumes automatically
+  @impl true
+  def handle_info({:DOWN, ref, :process, _pid, reason}, %{subscriber_ref: ref} = state) do
+    Logger.warning("[Kafka][Consumer] Subscriber died (#{inspect(reason)}) — restarting in 5s")
+    schedule_start(5_000)
+    {:noreply, %{state | subscriber_ref: nil}}
   end
 
   defp schedule_start(ms), do: Process.send_after(self(), :start_subscriber, ms)
@@ -92,10 +103,15 @@ defmodule MiniWa.Streaming.Consumer do
   end
 
   def handle_message({:kafka_message, _offset, _key, value, _ts_type, _ts, _headers}, state) do
-    case Jason.decode(value) do
-      {:ok, %{"type" => "group"} = payload} -> process_group(payload)
-      {:ok, payload}                         -> process_1to1(payload)
-      {:error, reason} -> Logger.error("[Kafka][Consumer] Decode failed: #{inspect(reason)}")
+    try do
+      case Jason.decode(value) do
+        {:ok, %{"type" => "group"} = payload} -> process_group(payload)
+        {:ok, payload}                         -> process_1to1(payload)
+        {:error, reason} -> Logger.error("[Kafka][Consumer] Decode failed: #{inspect(reason)}")
+      end
+    rescue
+      e ->
+        Logger.error("[Kafka][Consumer] ✗ handle_message crashed: #{Exception.message(e)}\n#{Exception.format_stacktrace(__STACKTRACE__)}")
     end
 
     {:ok, :commit, state}
@@ -141,12 +157,9 @@ defmodule MiniWa.Streaming.Consumer do
     end
   end
 
-  # Group: write once to ScyllaDB, then fan-out concurrently to all members.
-  # Delivers to online members directly; queues offline members in ScyllaDB.
-  # Task.async_stream runs up to @fan_out_concurrency deliveries in parallel,
-  # so 1000 members at 50 concurrency = ~20 rounds instead of 1000 sequential ops.
-  @fan_out_concurrency 50
-
+  # Group: write once to ScyllaDB, then queue only for offline members.
+  # Online delivery is handled immediately by the sender's Session via PubSub —
+  # the consumer only ensures offline members get the message when they reconnect.
   defp process_group(payload) do
     message  = build_message(payload)
     group_id = message.conversation_id
@@ -156,36 +169,19 @@ defmodule MiniWa.Streaming.Consumer do
     with :ok <- MiniWa.DB.persist_group_message(message),
          {:ok, members} <- MiniWa.DB.list_group_members(group_id) do
 
-      recipients = Enum.reject(members, fn %{user_id: uid} -> uid == message.from end)
-      Logger.info("[Kafka][Consumer] fanning out to #{length(recipients)} member(s) | id=#{message.id}")
-
-      Task.Supervisor.async_stream_nolink(
-        MiniWa.FanOut.Supervisor,
-        recipients,
-        fn %{user_id: uid} -> deliver_to_member(uid, message) end,
-        max_concurrency: @fan_out_concurrency,
-        timeout:         10_000,
-        on_timeout:      :kill_task
-      )
-      |> Stream.each(fn
-        {:ok, _}        -> :ok
-        {:exit, reason} -> Logger.error("[Kafka][Consumer] fan-out task failed: #{inspect(reason)}")
+      offline = Enum.reject(members, fn %{user_id: uid} ->
+        uid == message.from || Registry.lookup(MiniWa.Presence.Registry, uid) != []
       end)
-      |> Stream.run()
 
-      Logger.info("[Kafka][Consumer] ✓ fan-out complete | id=#{message.id}")
+      Logger.info("[Kafka][Consumer] queuing for #{length(offline)} offline member(s) | id=#{message.id}")
+      Enum.each(offline, fn %{user_id: uid} ->
+        MiniWa.DB.queue_undelivered_for_member(uid, message)
+      end)
     else
       {:error, reason} ->
         Logger.error("[Kafka][Consumer] ✗ group processing failed | #{inspect(reason)}")
-    end
-  end
-
-  defp deliver_to_member(uid, message) do
-    case Registry.lookup(MiniWa.Presence.Registry, uid) do
-      [{pid, _}] ->
-        GenServer.cast(pid, {:deliver, message})
-      [] ->
-        MiniWa.DB.queue_undelivered_for_member(uid, message)
+      other ->
+        Logger.error("[Kafka][Consumer] ✗ group processing unexpected return: #{inspect(other)}")
     end
   end
 end

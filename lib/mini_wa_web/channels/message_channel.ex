@@ -53,9 +53,10 @@ defmodule MiniWaWeb.MessageChannel do
         {:error, _} -> []
       end
 
-      # Subscribe to typing events for every group this user belongs to
+      # Subscribe to typing and message events for every group this user belongs to
       Enum.each(groups, fn %{group_id: gid} ->
         Phoenix.PubSub.subscribe(MiniWa.PubSub, "typing:group:#{gid}")
+        Phoenix.PubSub.subscribe(MiniWa.PubSub, "group:#{gid}")
       end)
 
       Logger.info("[Channel][#{user_id}] users=#{length(users)} groups=#{length(groups)}")
@@ -270,11 +271,32 @@ defmodule MiniWaWeb.MessageChannel do
     {:noreply, socket}
   end
 
+  # Real-time group message delivery via PubSub — skip sender (they rendered optimistically)
+  def handle_info({:group_message, message}, socket) do
+    if message.from != socket.assigns.user_id do
+      push(socket, "msg", %{
+        from:                  message.from,
+        content:               message.content,
+        message_id:            message.id,
+        sent_at:               message.sent_at,
+        type:                  "group",
+        conversation_id:       message.conversation_id,
+        client_sent_at:        Map.get(message, :client_sent_at),
+        kafka_published_at_ms: Map.get(message, :kafka_published_at_ms),
+        delivered_at_ms:       System.system_time(:millisecond),
+        media_url:             Map.get(message, :media_url),
+        media_type:            Map.get(message, :media_type)
+      })
+    end
+    {:noreply, socket}
+  end
+
   # Group invite — push to client so sidebar updates immediately
   def handle_info({:group_invite, group}, socket) do
     push(socket, "group_invite", group)
-    # Also subscribe to typing events for the new group
+    # Also subscribe to typing and message events for the new group
     Phoenix.PubSub.subscribe(MiniWa.PubSub, "typing:group:#{group.group_id}")
+    Phoenix.PubSub.subscribe(MiniWa.PubSub, "group:#{group.group_id}")
     {:noreply, socket}
   end
 
@@ -282,6 +304,7 @@ defmodule MiniWaWeb.MessageChannel do
   def handle_info({:removed_from_group, %{group_id: group_id}}, socket) do
     push(socket, "removed_from_group", %{group_id: group_id})
     Phoenix.PubSub.unsubscribe(MiniWa.PubSub, "typing:group:#{group_id}")
+    Phoenix.PubSub.unsubscribe(MiniWa.PubSub, "group:#{group_id}")
     {:noreply, socket}
   end
 
