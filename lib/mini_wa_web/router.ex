@@ -22,6 +22,12 @@ defmodule MiniWaWeb.Router do
 
   scope "/api", MiniWaWeb do
     pipe_through :api
-    post "/upload", UploadController, :create
+    post "/upload",    UploadController,    :create
+    get  "/analytics", AnalyticsController, :data
+  end
+
+  scope "/", MiniWaWeb do
+    pipe_through :browser
+    get "/analytics", AnalyticsController, :index
   end
 end

@@ -49,6 +49,7 @@ defmodule MiniWa.Session do
     ══════════════════════════════════════════════════════════
     """)
 
+    MiniWa.Analytics.Store.record_session_start()
     {:ok, %{user_id: user_id, channel_pid: nil, in_flight: %{}}}
   end
 
@@ -245,6 +246,10 @@ defmodule MiniWa.Session do
   @impl true
   def terminate(reason, state) do
     Logger.info("[Session][#{state.user_id}] Session terminated | reason=#{inspect(reason)}")
+    # Count unexpected exits — normal disconnects stop with :normal.
+    unless reason in [:normal, :shutdown] do
+      MiniWa.Analytics.Store.record_crash()
+    end
   end
 
   # ─── Private ───────────────────────────────────────────────────────────────

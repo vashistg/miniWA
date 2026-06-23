@@ -16,6 +16,7 @@ defmodule MiniWa.Application do
         MiniWa.Presence.Registry    — ETS-backed presence (user_id → Session PID)
         MiniWa.Session.Supervisor   — DynamicSupervisor (one Session per user)
         MiniWa.Streaming.Consumer   — Kafka consumer → ScyllaDB + delivery
+        MiniWa.Analytics.Supervisor — analytics consumer + metrics store + lag poller
         MiniWaWeb.Endpoint          — Phoenix WebSocket endpoint
     ══════════════════════════════════════════════════════
     """)
@@ -52,6 +53,8 @@ defmodule MiniWa.Application do
       {Task.Supervisor, name: MiniWa.FanOut.Supervisor},
       # Kafka consumer — reads messages topic, writes ScyllaDB, delivers to Sessions
       MiniWa.Streaming.Consumer,
+      # Analytics subsystem — separate Kafka consumer group + metrics store + lag poller
+      MiniWa.Analytics.Supervisor,
       MiniWaWeb.Endpoint
     ]
 
