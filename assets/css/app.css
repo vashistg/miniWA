@@ -617,3 +617,90 @@ html, body {
   0%, 80%, 100% { transform: translateY(0);    opacity: 0.4; }
   40%           { transform: translateY(-4px); opacity: 1;   }
 }
+
+/* ─── Attach button ──────────────────────────────────────────────────────────── */
+.btn-attach {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0 6px;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.btn-attach:hover { opacity: 1; }
+
+/* ─── Media preview bar (above composer) ─────────────────────────────────────── */
+.media-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #181825;
+  border-top: 1px solid #313244;
+  flex-shrink: 0;
+  min-height: 48px;
+  flex-wrap: wrap;
+}
+.media-preview-bar .media-img { max-height: 80px; max-width: 120px; border-radius: 6px; }
+.media-preview-bar .media-video { max-height: 80px; max-width: 140px; border-radius: 6px; }
+.media-preview-bar .media-audio { width: 180px; }
+.upload-status  { color: #a6adc8; font-size: 13px; }
+.upload-error   { color: #f38ba8; font-size: 13px; }
+.media-cancel-btn {
+  background: none;
+  border: none;
+  color: #6c7086;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 4px;
+  margin-left: auto;
+}
+.media-cancel-btn:hover { color: #f38ba8; }
+.upload-progress-track {
+  display: inline-block;
+  width: 120px;
+  height: 4px;
+  background: #313244;
+  border-radius: 2px;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+.upload-progress-bar {
+  display: block;
+  height: 100%;
+  background: #89b4fa;
+  border-radius: 2px;
+  transition: width 0.2s;
+}
+
+/* ─── Media inside message bubbles ───────────────────────────────────────────── */
+.media-img {
+  display: block;
+  max-width: 280px;
+  max-height: 220px;
+  border-radius: 8px;
+  cursor: zoom-in;
+  margin-bottom: 4px;
+  object-fit: cover;
+}
+.media-audio {
+  display: block;
+  width: 240px;
+  margin-bottom: 4px;
+}
+.media-video {
+  display: block;
+  max-width: 280px;
+  max-height: 200px;
+  border-radius: 8px;
+  margin-bottom: 4px;
+}
+.media-link {
+  display: inline-block;
+  color: #89b4fa;
+  text-decoration: underline;
+  font-size: 13px;
+  margin-bottom: 4px;
+}

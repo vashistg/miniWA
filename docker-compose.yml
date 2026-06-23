@@ -44,5 +44,24 @@ services:
       timeout: 10s
       retries: 10
 
+  minio:
+    image: minio/minio:latest
+    container_name: mini_wa_minio
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Console UI (http://localhost:9001  admin/minioadmin)
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   scylla_data:
+  minio_data:

@@ -62,7 +62,11 @@ defmodule MiniWa.MixProject do
       {:bandit, "~> 1.5"},
       {:xandra, "~> 0.19"},
       {:decimal, "~> 2.0"},
-      {:brod, "~> 3.16"}
+      {:brod, "~> 3.16"},
+      {:ex_aws, "~> 2.5"},
+      {:ex_aws_s3, "~> 2.5"},
+      {:hackney, "~> 1.20"},
+      {:sweet_xml, "~> 0.7"}
     ]
   end
 

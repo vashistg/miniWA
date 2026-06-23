@@ -75,10 +75,15 @@ defmodule MiniWaWeb.MessageChannel do
 
   # Alice sends a message to Bob
   @impl true
-  def handle_in("send_msg", %{"to" => to, "content" => content, "client_id" => client_id}, socket) do
+  def handle_in("send_msg", params, socket) do
+    %{"to" => to, "client_id" => client_id} = params
+    content        = Map.get(params, "content", "")
+    client_sent_at = Map.get(params, "client_sent_at")
+    media_url      = Map.get(params, "media_url")
+    media_type     = Map.get(params, "media_type")
     user_id = socket.assigns.user_id
-    Logger.info("[Channel][#{user_id}] send_msg ─▶ Session | to=#{to} content=\"#{content}\" client_id=#{client_id}")
-    Session.send_message(user_id, to, content, client_id)
+    Logger.info("[Channel][#{user_id}] send_msg ─▶ Session | to=#{to} client_id=#{client_id}")
+    Session.send_message(user_id, to, content, client_id, client_sent_at, media_url, media_type)
     {:noreply, socket}
   end
 
@@ -121,10 +126,15 @@ defmodule MiniWaWeb.MessageChannel do
   end
 
   # Send a message to a group
-  def handle_in("send_group_msg", %{"group_id" => group_id, "content" => content, "client_id" => client_id}, socket) do
+  def handle_in("send_group_msg", params, socket) do
+    %{"group_id" => group_id, "client_id" => client_id} = params
+    content        = Map.get(params, "content", "")
+    client_sent_at = Map.get(params, "client_sent_at")
+    media_url      = Map.get(params, "media_url")
+    media_type     = Map.get(params, "media_type")
     user_id = socket.assigns.user_id
     Logger.info("[Channel][#{user_id}] send_group_msg → group=#{group_id}")
-    Session.send_group_message(user_id, group_id, content, client_id)
+    Session.send_group_message(user_id, group_id, content, client_id, client_sent_at, media_url, media_type)
     {:noreply, socket}
   end
 
@@ -210,7 +220,11 @@ defmodule MiniWaWeb.MessageChannel do
   @impl true
   def handle_info({:tick1, message}, socket) do
     Logger.info("[Channel][#{socket.assigns.user_id}] Session ─▶ WS tick1 | client_id=#{message.client_id} message_id=#{message.id}")
-    push(socket, "tick1", %{client_id: message.client_id, message_id: message.id})
+    push(socket, "tick1", %{
+      client_id:             message.client_id,
+      message_id:            message.id,
+      kafka_published_at_ms: Map.get(message, :kafka_published_at_ms)
+    })
     {:noreply, socket}
   end
 
@@ -219,13 +233,17 @@ defmodule MiniWaWeb.MessageChannel do
     Logger.info("[Channel][#{socket.assigns.user_id}] Session ─▶ WS msg | from=#{message.from} message_id=#{message.id}")
     type = Map.get(message, :type, "1:1")
     push(socket, "msg", %{
-      from:            message.from,
-      content:         message.content,
-      message_id:      message.id,
-      sent_at:         message.sent_at,
-      type:            type,
-      # only send conversation_id for groups — 1:1 receivers use `from` as the conv key
-      conversation_id: if(type == "group", do: Map.get(message, :conversation_id), else: nil)
+      from:                  message.from,
+      content:               message.content,
+      message_id:            message.id,
+      sent_at:               message.sent_at,
+      type:                  type,
+      conversation_id:       if(type == "group", do: Map.get(message, :conversation_id), else: nil),
+      client_sent_at:        Map.get(message, :client_sent_at),
+      kafka_published_at_ms: Map.get(message, :kafka_published_at_ms),
+      delivered_at_ms:       System.system_time(:millisecond),
+      media_url:             Map.get(message, :media_url),
+      media_type:            Map.get(message, :media_type)
     })
     {:noreply, socket}
   end

@@ -78,6 +78,20 @@ config :mini_wa, MiniWa.Streaming,
   kafka_brokers: [{"localhost", 9092}],
   topic: "messages"
 
+config :mini_wa, MiniWa.Media,
+  bucket:   "mini-wa-media",
+  base_url: "http://localhost:9000"
+
+config :ex_aws,
+  access_key_id:     "minioadmin",
+  secret_access_key: "minioadmin",
+  region:            "us-east-1"
+
+config :ex_aws, :s3,
+  scheme: "http://",
+  host:   "localhost",
+  port:   9000
+
 config :phoenix_live_view,
   # Include debug annotations and locations in rendered markup.
   # Changing this configuration will require mix clean and a full recompile.

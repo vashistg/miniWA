@@ -9,7 +9,15 @@ defmodule Mix.Tasks.MiniWa.Db.Setup do
     {"messages — add sent_at_ms",
      "ALTER TABLE mini_wa.messages ADD sent_at_ms bigint"},
     {"undelivered_messages — add type",
-     "ALTER TABLE mini_wa.undelivered_messages ADD type text"}
+     "ALTER TABLE mini_wa.undelivered_messages ADD type text"},
+    {"messages — add media_url",
+     "ALTER TABLE mini_wa.messages ADD media_url text"},
+    {"messages — add media_type",
+     "ALTER TABLE mini_wa.messages ADD media_type text"},
+    {"undelivered_messages — add media_url",
+     "ALTER TABLE mini_wa.undelivered_messages ADD media_url text"},
+    {"undelivered_messages — add media_type",
+     "ALTER TABLE mini_wa.undelivered_messages ADD media_type text"}
   ]
 
   @statements [
@@ -85,6 +93,7 @@ defmodule Mix.Tasks.MiniWa.Db.Setup do
   def run(_args) do
     Mix.shell().info("Starting Xandra...")
     {:ok, _} = Application.ensure_all_started(:xandra)
+    {:ok, _} = Application.ensure_all_started(:hackney)
 
     nodes = Application.get_env(:mini_wa, MiniWa.DB, []) |> Keyword.get(:nodes, ["localhost:9042"])
     Mix.shell().info("Connecting to #{inspect(nodes)}...")
@@ -118,5 +127,13 @@ defmodule Mix.Tasks.MiniWa.Db.Setup do
     """)
 
     GenServer.stop(conn)
+
+    Mix.shell().info("Setting up MinIO bucket...")
+    try do
+      MiniWa.Media.setup!()
+      Mix.shell().info("  ✓ MinIO bucket ready (public-read)")
+    rescue
+      e -> Mix.shell().error("  ✗ MinIO setup failed (is MinIO running?): #{Exception.message(e)}")
+    end
   end
 end

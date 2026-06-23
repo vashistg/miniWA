@@ -105,7 +105,7 @@ defmodule MiniWa.DB do
     Logger.info("[DB] Fetching history | group=#{group_id} since_ms=#{since_ms}")
     case Xandra.execute(MiniWa.Xandra,
            """
-           SELECT message_id, sender_id, content, sent_at_ms
+           SELECT message_id, sender_id, content, sent_at_ms, media_url, media_type
            FROM mini_wa.messages
            WHERE conversation_id = ? AND sent_at_ms >= ?
            ALLOW FILTERING
@@ -120,7 +120,9 @@ defmodule MiniWa.DB do
             content:         row["content"],
             conversation_id: group_id,
             type:            "group",
-            sent_at:         unix_ms_to_iso(row["sent_at_ms"])
+            sent_at:         unix_ms_to_iso(row["sent_at_ms"]),
+            media_url:       row["media_url"],
+            media_type:      row["media_type"]
           }
         end)}
       {:error, reason} ->
@@ -157,7 +159,7 @@ defmodule MiniWa.DB do
     Logger.info("[DB] Fetching undelivered for #{user_id}")
     case Xandra.execute(MiniWa.Xandra,
            """
-           SELECT message_id, conversation_id, sender_id, content, type
+           SELECT message_id, conversation_id, sender_id, content, type, media_url, media_type
            FROM mini_wa.undelivered_messages
            WHERE recipient_id = ?
            """,
@@ -174,7 +176,9 @@ defmodule MiniWa.DB do
               content:         row["content"],
               conversation_id: row["conversation_id"],
               type:            type,
-              sent_at:         DateTime.utc_now() |> DateTime.to_iso8601()
+              sent_at:         DateTime.utc_now() |> DateTime.to_iso8601(),
+              media_url:       row["media_url"],
+              media_type:      row["media_type"]
             }
           end)
           |> Enum.sort_by(& &1.id)
@@ -195,19 +199,24 @@ defmodule MiniWa.DB do
   # ─── Private ───────────────────────────────────────────────────────────────
 
   defp insert_message(conv_id, message) do
+    media_url  = Map.get(message, :media_url)
+    media_type = Map.get(message, :media_type)
     case Xandra.execute(MiniWa.Xandra,
            """
            INSERT INTO mini_wa.messages
-             (conversation_id, message_id, sender_id, recipient_id, content, status, sent_at_ms)
-           VALUES (?, ?, ?, ?, ?, 'sent', ?)
+             (conversation_id, message_id, sender_id, recipient_id, content, status,
+              sent_at_ms, media_url, media_type)
+           VALUES (?, ?, ?, ?, ?, 'sent', ?, ?, ?)
            """,
            [
              {"text",   conv_id},
              {"text",   message.id},
              {"text",   message.from},
              {"text",   message.to},
-             {"text",   message.content},
-             {"bigint", System.system_time(:millisecond)}
+             {"text",   message.content || ""},
+             {"bigint", System.system_time(:millisecond)},
+             {"text",   media_url},
+             {"text",   media_type}
            ]) do
       {:ok, _} ->
         Logger.info("[DB] ✓ messages write | id=#{message.id}")
@@ -219,20 +228,25 @@ defmodule MiniWa.DB do
   end
 
   defp insert_undelivered(conv_id, message) do
-    type = Map.get(message, :type, "1:1")
+    type       = Map.get(message, :type, "1:1")
+    media_url  = Map.get(message, :media_url)
+    media_type = Map.get(message, :media_type)
     case Xandra.execute(MiniWa.Xandra,
            """
            INSERT INTO mini_wa.undelivered_messages
-             (recipient_id, message_id, conversation_id, sender_id, content, type)
-           VALUES (?, ?, ?, ?, ?, ?)
+             (recipient_id, message_id, conversation_id, sender_id, content, type,
+              media_url, media_type)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            """,
            [
              {"text", message.to},
              {"text", message.id},
              {"text", conv_id},
              {"text", message.from},
-             {"text", message.content},
-             {"text", type}
+             {"text", message.content || ""},
+             {"text", type},
+             {"text", media_url},
+             {"text", media_type}
            ]) do
       {:ok, _} -> :ok
       {:error, reason} ->

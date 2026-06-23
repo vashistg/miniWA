@@ -29,8 +29,7 @@ defmodule MiniWaWeb.Endpoint do
     at: "/",
     from: :mini_wa,
     gzip: not code_reloading?,
-    only: MiniWaWeb.static_paths(),
-    raise_on_missing_only: code_reloading?
+    only: MiniWaWeb.static_paths()
 
   # Code reloading can be explicitly enabled under the
   # :code_reloader configuration of your endpoint.
@@ -46,7 +45,9 @@ defmodule MiniWaWeb.Endpoint do
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
-    json_decoder: Phoenix.json_library()
+    json_decoder: Phoenix.json_library(),
+    # Allow up to 200 MB for video uploads — Plug writes to a temp file, so RAM is not a concern.
+    length: 200_000_000
 
   plug Plug.MethodOverride
   plug Plug.Head

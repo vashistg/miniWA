@@ -20,8 +20,8 @@ defmodule MiniWaWeb.Router do
     get "/", PageController, :home
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", MiniWaWeb do
-  #   pipe_through :api
-  # end
+  scope "/api", MiniWaWeb do
+    pipe_through :api
+    post "/upload", UploadController, :create
+  end
 end

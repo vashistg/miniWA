@@ -15,14 +15,18 @@ defmodule MiniWa.Streaming.Producer do
               MiniWa.DB.conversation_id(message.from, message.to)
 
     payload = Jason.encode!(%{
-      id:              message.id,
-      type:            Map.get(message, :type, "1:1"),
-      from:            message.from,
-      to:              message.to,
-      content:         message.content,
-      client_id:       message.client_id,
-      sent_at:         message.sent_at,
-      conversation_id: conv_id
+      id:                    message.id,
+      type:                  Map.get(message, :type, "1:1"),
+      from:                  message.from,
+      to:                    message.to,
+      content:               message.content,
+      client_id:             message.client_id,
+      sent_at:               message.sent_at,
+      conversation_id:       conv_id,
+      client_sent_at:        Map.get(message, :client_sent_at),
+      kafka_published_at_ms: Map.get(message, :kafka_published_at_ms),
+      media_url:             Map.get(message, :media_url),
+      media_type:            Map.get(message, :media_type)
     })
 
     key = conv_id

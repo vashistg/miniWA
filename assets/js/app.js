@@ -7,6 +7,8 @@ let myUserId       = null
 let activeConv     = null        // id of open conversation (user_id or group_id)
 let activeConvType = null        // "user" | "group"
 const tickMap      = {}
+const sendTimeMap  = {}         // clientId → Date.now() at send, for latency measurement
+let   pendingMedia = null       // {url, mediaType, name} — set after a successful upload
 const allUsers     = new Map()   // user_id → { online: bool }
 const myGroups     = new Map()   // group_id → { name }
 const unreadCounts = new Map()   // conv_id → number
@@ -93,14 +95,25 @@ window.connect = function () {
 
   // ── Server → Client ─────────────────────────────────────────────────────
 
-  channel.on("msg", ({from, content, message_id, conversation_id}) => {
-    const convId = conversation_id || from
-    log(`← msg  from=${from}  conv=${convId}  "${content}"`, "recv")
+  channel.on("msg", ({from, content, message_id, conversation_id,
+                      client_sent_at, kafka_published_at_ms, delivered_at_ms,
+                      media_url, media_type}) => {
+    const convId  = conversation_id || from
+    const nowMs   = Date.now()
+    const parts   = []
+    if (kafka_published_at_ms && delivered_at_ms)
+      parts.push(`consumer=${delivered_at_ms - kafka_published_at_ms}ms`)
+    if (client_sent_at && delivered_at_ms)
+      parts.push(`server=${delivered_at_ms - client_sent_at}ms`)
+    if (client_sent_at)
+      parts.push(`e2e≈${nowMs - client_sent_at}ms`)
+    const latency = parts.length ? `  [${parts.join("  ")}]` : ""
+    log(`← msg  from=${from}  conv=${convId}${latency}`, "recv")
 
-    saveMessage(convId, {direction: "incoming", from, content, messageId: message_id, convId})
+    saveMessage(convId, {direction: "incoming", from, content, messageId: message_id, convId, mediaUrl: media_url, mediaType: media_type})
 
     if (activeConv === convId) {
-      renderIncomingMessage(from, content, message_id)
+      renderIncomingMessage(from, content, message_id, media_url, media_type)
     } else {
       unreadCounts.set(convId, (unreadCounts.get(convId) || 0) + 1)
       renderSidebar()
@@ -116,8 +129,11 @@ window.connect = function () {
     }
   })
 
-  channel.on("tick1", ({client_id, message_id}) => {
-    log(`← tick1 ✓  ${client_id} → ${message_id}`, "tick")
+  channel.on("tick1", ({client_id, message_id, kafka_published_at_ms}) => {
+    const sendTime = sendTimeMap[client_id]
+    const wsKafkaMs = sendTime ? Date.now() - sendTime : null
+    const latency = wsKafkaMs !== null ? `  [ws+kafka=${wsKafkaMs}ms]` : ""
+    log(`← tick1 ✓  ${client_id} → ${message_id}${latency}`, "tick")
     if (tickMap[client_id]) {
       tickMap[message_id] = tickMap[client_id]
       setTick(client_id, "✓", "tick1")
@@ -267,8 +283,8 @@ function openConversation(id, type) {
     $("messages").innerHTML = `<div class="no-conversation">No messages yet — say hello!</div>`
   } else {
     msgs.forEach(m => {
-      if (m.direction === "outgoing") renderOutgoingMessage(m.to || id, m.content, m.clientId, m.messageId, m.tick)
-      else renderIncomingMessage(m.from, m.content, m.messageId)
+      if (m.direction === "outgoing") renderOutgoingMessage(m.to || id, m.content, m.clientId, m.messageId, m.tick, m.mediaUrl, m.mediaType)
+      else renderIncomingMessage(m.from, m.content, m.messageId, m.mediaUrl, m.mediaType)
     })
   }
 
@@ -286,28 +302,60 @@ function openConversation(id, type) {
 // ─── Send ─────────────────────────────────────────────────────────────────────
 window.sendMessage = function () {
   const content = $("msg-input").value.trim()
-  if (!content) return
+  if (!content && !pendingMedia) return
   if (!activeConv) { log("Select a conversation first", "error"); return }
 
-  const clientId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+  const clientId     = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+  const clientSentAt = Date.now()
+  sendTimeMap[clientId] = clientSentAt
 
-  saveMessage(activeConv, {direction: "outgoing", to: activeConv, content, clientId, messageId: null, tick: "pending"})
-  renderOutgoingMessage(activeConv, content, clientId, null, "pending")
+  const mediaUrl  = pendingMedia?.url  || null
+  const mediaType = pendingMedia?.mediaType || null
+
+  saveMessage(activeConv, {direction: "outgoing", to: activeConv, content, clientId, messageId: null, tick: "pending", mediaUrl, mediaType})
+  renderOutgoingMessage(activeConv, content, clientId, null, "pending", mediaUrl, mediaType)
+
+  const extra = mediaUrl ? {media_url: mediaUrl, media_type: mediaType} : {}
 
   if (activeConvType === "group") {
-    log(`→ send_group_msg  group=${activeConv}  "${content}"`, "send")
-    channel.push("send_group_msg", {group_id: activeConv, content, client_id: clientId})
+    log(`→ send_group_msg  group=${activeConv}${mediaType ? "  ["+mediaType+"]" : ""}`, "send")
+    channel.push("send_group_msg", {group_id: activeConv, content, client_id: clientId, client_sent_at: clientSentAt, ...extra})
   } else {
-    log(`→ send_msg  to=${activeConv}  "${content}"`, "send")
-    channel.push("send_msg", {to: activeConv, content, client_id: clientId})
+    log(`→ send_msg  to=${activeConv}${mediaType ? "  ["+mediaType+"]" : ""}`, "send")
+    channel.push("send_msg", {to: activeConv, content, client_id: clientId, client_sent_at: clientSentAt, ...extra})
   }
 
   $("msg-input").value = ""
+  clearMediaPreview()
   $("msg-input").focus()
 }
 
+// ─── Media helpers ────────────────────────────────────────────────────────────
+function mediaHtml(mediaUrl, mediaType) {
+  if (!mediaUrl) return ""
+  if (mediaType === "image")
+    return `<img class="media-img" src="${mediaUrl}" loading="lazy" onclick="window.open('${mediaUrl}','_blank')" />`
+  if (mediaType === "audio")
+    return `<audio class="media-audio" controls src="${mediaUrl}"></audio>`
+  if (mediaType === "video")
+    return `<video class="media-video" controls src="${mediaUrl}"></video>`
+  return `<a class="media-link" href="${mediaUrl}" target="_blank">📎 ${mediaUrl.split("/").pop()}</a>`
+}
+
+// ─── Media upload + preview ───────────────────────────────────────────────────
+window.openFilePicker = function () {
+  $("file-input").click()
+}
+
+
+window.clearMediaPreview = function () {
+  pendingMedia = null
+  const bar = $("media-preview-bar")
+  if (bar) { bar.innerHTML = ""; bar.style.display = "none" }
+}
+
 // ─── Message rendering ────────────────────────────────────────────────────────
-function renderOutgoingMessage(to, content, clientId, messageId, tick = "pending") {
+function renderOutgoingMessage(to, content, clientId, messageId, tick = "pending", mediaUrl = null, mediaType = null) {
   const domId  = messageId ? `tick-${messageId}` : `tick-${clientId}`
   tickMap[clientId || messageId] = domId
   const symbol = {pending: "⏳", tick1: "✓", tick2: "✓✓", tick3: "✓✓"}[tick] || "⏳"
@@ -317,20 +365,22 @@ function renderOutgoingMessage(to, content, clientId, messageId, tick = "pending
   div.innerHTML = `
     <div class="bubble">
       <span class="msg-meta">→ ${escHtml(to)}</span>
-      <span class="msg-content">${escHtml(content)}</span>
+      ${mediaHtml(mediaUrl, mediaType)}
+      ${content ? `<span class="msg-content">${escHtml(content)}</span>` : ""}
       <span class="ticks ${tick || "pending"}" id="${domId}">${symbol}</span>
     </div>`
   $("messages").appendChild(div)
   $("messages").scrollTop = $("messages").scrollHeight
 }
 
-function renderIncomingMessage(from, content, messageId) {
+function renderIncomingMessage(from, content, messageId, mediaUrl = null, mediaType = null) {
   const div = document.createElement("div")
   div.className = "msg-row incoming"
   div.innerHTML = `
     <div class="bubble">
       <span class="msg-meta">${escHtml(from)}</span>
-      <span class="msg-content">${escHtml(content)}</span>
+      ${mediaHtml(mediaUrl, mediaType)}
+      ${content ? `<span class="msg-content">${escHtml(content)}</span>` : ""}
     </div>`
   $("messages").appendChild(div)
   $("messages").scrollTop = $("messages").scrollHeight
@@ -527,7 +577,7 @@ function clearTyping() {
   typingClearTimers.clear()
 }
 
-// ─── Keyboard ─────────────────────────────────────────────────────────────────
+// ─── Keyboard + file input ────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
   $("msg-input")?.addEventListener("keydown", e => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); window.sendMessage(); return }
@@ -546,5 +596,59 @@ document.addEventListener("DOMContentLoaded", () => {
   })
   $("username-input")?.addEventListener("keydown", e => {
     if (e.key === "Enter") window.connect()
+  })
+
+  $("file-input")?.addEventListener("change", e => {
+    const file = e.target.files[0]
+    if (!file) return
+    e.target.value = ""
+
+    const MAX_BYTES = 200 * 1024 * 1024
+    if (file.size > MAX_BYTES) {
+      log(`✗ file too large (${(file.size/1024/1024).toFixed(1)} MB, max 200 MB)`, "error")
+      return
+    }
+
+    const bar = $("media-preview-bar")
+    bar.style.display = "flex"
+
+    // Use XMLHttpRequest so we can show real upload progress
+    const xhr = new XMLHttpRequest()
+    const form = new FormData()
+    form.append("file", file)
+
+    xhr.upload.addEventListener("progress", ev => {
+      if (!ev.lengthComputable) return
+      const pct = Math.round(ev.loaded / ev.total * 100)
+      bar.innerHTML = `<span class="upload-status">Uploading ${escHtml(file.name)}… ${pct}%
+        <span class="upload-progress-track"><span class="upload-progress-bar" style="width:${pct}%"></span></span>
+      </span>`
+    })
+
+    xhr.addEventListener("load", () => {
+      try {
+        const {url, media_type, error} = JSON.parse(xhr.responseText)
+        if (error || xhr.status >= 400) {
+          bar.innerHTML = `<span class="upload-error">✗ ${escHtml(error || "Upload failed")}</span>`
+          return
+        }
+        pendingMedia = {url, mediaType: media_type, name: file.name}
+        bar.innerHTML = mediaHtml(url, media_type) +
+          `<button class="media-cancel-btn" onclick="window.clearMediaPreview()">✕</button>`
+        $("msg-input").focus()
+        log(`↑ uploaded ${media_type} (${(file.size/1024/1024).toFixed(1)} MB)`, "system")
+      } catch (_) {
+        bar.innerHTML = `<span class="upload-error">✗ Upload failed</span>`
+      }
+    })
+
+    xhr.addEventListener("error", () => {
+      bar.innerHTML = `<span class="upload-error">✗ Upload failed — check connection</span>`
+      log("✗ upload failed", "error")
+    })
+
+    xhr.open("POST", "/api/upload")
+    xhr.send(form)
+    bar.innerHTML = `<span class="upload-status">Uploading ${escHtml(file.name)}… 0%</span>`
   })
 })

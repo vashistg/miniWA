@@ -52,7 +52,10 @@
         <span id="typing-text"></span>
         <span class="typing-dots"><span></span><span></span><span></span></span>
       </div>
+      <div id="media-preview-bar" class="media-preview-bar" style="display:none"></div>
       <div class="composer">
+        <input id="file-input" type="file" accept="image/*,audio/*,video/*" style="display:none" />
+        <button class="btn-attach" onclick="window.openFilePicker()" title="Attach image, audio or video">📎</button>
         <input id="msg-input" class="input-field msg-field"
                type="text" placeholder="Type a message…" />
         <button class="btn-send" onclick="window.sendMessage()">Send →</button>

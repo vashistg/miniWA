@@ -22,12 +22,12 @@ defmodule MiniWa.Session do
     GenServer.call(via(user_id), {:register_channel, channel_pid})
   end
 
-  def send_message(from_user_id, to_user_id, content, client_id) do
-    GenServer.cast(via(from_user_id), {:send_message, to_user_id, content, client_id})
+  def send_message(from_user_id, to_user_id, content, client_id, client_sent_at \\ nil, media_url \\ nil, media_type \\ nil) do
+    GenServer.cast(via(from_user_id), {:send_message, to_user_id, content, client_id, client_sent_at, media_url, media_type})
   end
 
-  def send_group_message(from_user_id, group_id, content, client_id) do
-    GenServer.cast(via(from_user_id), {:send_group_message, group_id, content, client_id})
+  def send_group_message(from_user_id, group_id, content, client_id, client_sent_at \\ nil, media_url \\ nil, media_type \\ nil) do
+    GenServer.cast(via(from_user_id), {:send_group_message, group_id, content, client_id, client_sent_at, media_url, media_type})
   end
 
   def notify_delivered(sender_user_id, message_id) do
@@ -69,8 +69,9 @@ defmodule MiniWa.Session do
   # Consumer role is now persistence + offline queue only — it never delivers
   # to online users.
   @impl true
-  def handle_cast({:send_message, to_user_id, content, client_id}, state) do
-    message_id = generate_id()
+  def handle_cast({:send_message, to_user_id, content, client_id, client_sent_at, media_url, media_type}, state) do
+    message_id            = generate_id()
+    kafka_published_at_ms = System.system_time(:millisecond)
 
     # Step 1 — snapshot receiver presence before the Kafka round-trip
     receiver = Registry.lookup(MiniWa.Presence.Registry, to_user_id)
@@ -85,12 +86,16 @@ defmodule MiniWa.Session do
     """)
 
     message = %{
-      id:      message_id,
-      from:    state.user_id,
-      to:      to_user_id,
-      content: content,
-      client_id: client_id,
-      sent_at: DateTime.utc_now() |> DateTime.to_iso8601()
+      id:                    message_id,
+      from:                  state.user_id,
+      to:                    to_user_id,
+      content:               content,
+      client_id:             client_id,
+      sent_at:               DateTime.utc_now() |> DateTime.to_iso8601(),
+      client_sent_at:        client_sent_at,
+      kafka_published_at_ms: kafka_published_at_ms,
+      media_url:             media_url,
+      media_type:            media_type
     }
 
     # Step 2 — Kafka publish → tick-1
@@ -118,20 +123,25 @@ defmodule MiniWa.Session do
   # Group send — Kafka only. Session stays unblocked.
   # Consumer owns fan-out for all groups (concurrent via Task.async_stream).
   @impl true
-  def handle_cast({:send_group_message, group_id, content, client_id}, state) do
-    message_id = generate_id()
+  def handle_cast({:send_group_message, group_id, content, client_id, client_sent_at, media_url, media_type}, state) do
+    message_id            = generate_id()
+    kafka_published_at_ms = System.system_time(:millisecond)
 
     Logger.info("[Session][#{state.user_id}] group send | group=#{group_id} id=#{message_id}")
 
     message = %{
-      id:              message_id,
-      type:            "group",
-      from:            state.user_id,
-      to:              group_id,
-      content:         content,
-      client_id:       client_id,
-      sent_at:         DateTime.utc_now() |> DateTime.to_iso8601(),
-      conversation_id: group_id
+      id:                    message_id,
+      type:                  "group",
+      from:                  state.user_id,
+      to:                    group_id,
+      content:               content,
+      client_id:             client_id,
+      sent_at:               DateTime.utc_now() |> DateTime.to_iso8601(),
+      conversation_id:       group_id,
+      client_sent_at:        client_sent_at,
+      kafka_published_at_ms: kafka_published_at_ms,
+      media_url:             media_url,
+      media_type:            media_type
     }
 
     case MiniWa.Streaming.Producer.publish(message) do

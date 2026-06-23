@@ -105,14 +105,18 @@ defmodule MiniWa.Streaming.Consumer do
 
   defp build_message(payload) do
     %{
-      id:              payload["id"],
-      type:            payload["type"] || "1:1",
-      from:            payload["from"],
-      to:              payload["to"],
-      content:         payload["content"],
-      client_id:       payload["client_id"],
-      sent_at:         payload["sent_at"],
-      conversation_id: payload["conversation_id"]
+      id:                    payload["id"],
+      type:                  payload["type"] || "1:1",
+      from:                  payload["from"],
+      to:                    payload["to"],
+      content:               payload["content"],
+      client_id:             payload["client_id"],
+      sent_at:               payload["sent_at"],
+      conversation_id:       payload["conversation_id"],
+      client_sent_at:        payload["client_sent_at"],
+      kafka_published_at_ms: payload["kafka_published_at_ms"],
+      media_url:             payload["media_url"],
+      media_type:            payload["media_type"]
     }
   end
 
