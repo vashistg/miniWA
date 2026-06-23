@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>miniWA — System Design</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f1117;
+    color: #e2e8f0;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  header {
+    background: #1a1f2e;
+    border-bottom: 1px solid #2d3748;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo { font-size: 20px; font-weight: 700; color: #25D366; letter-spacing: -0.5px; }
+  .logo span { color: #e2e8f0; }
+
+  /* ── Breadcrumb ── */
+  #breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #718096;
+    flex: 1;
+  }
+  .crumb { cursor: pointer; transition: color 0.2s; }
+  .crumb:hover { color: #25D366; }
+  .crumb.active { color: #e2e8f0; cursor: default; font-weight: 600; }
+  .crumb-sep { color: #4a5568; }
+  .back-btn {
+    display: none;
+    background: #2d3748;
+    border: none;
+    color: #e2e8f0;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.2s;
+  }
+  .back-btn:hover { background: #4a5568; }
+  .back-btn.visible { display: inline-block; }
+
+  /* ── Main canvas ── */
+  #canvas {
+    position: relative;
+    width: 100%;
+    min-height: calc(100vh - 57px);
+    padding: 40px 24px 60px;
+    overflow: hidden;
+  }
+
+  /* ── Level label ── */
+  .level-label {
+    text-align: center;
+    margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #4a5568;
+  }
+  .level-title {
+    text-align: center;
+    margin-bottom: 36px;
+    font-size: 22px;
+    font-weight: 700;
+    color: #e2e8f0;
+  }
+
+  /* ── Diagram wrapper ── */
+  .diagram {
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .diagram.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ── SVG arrows ── */
+  .arrows { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+
+  /* ── Nodes ── */
+  .nodes {
+    position: relative;
+    z-index: 1;
+  }
+
+  .node {
+    position: absolute;
+    border-radius: 12px;
+    padding: 16px 20px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    border: 2px solid transparent;
+    user-select: none;
+  }
+  .node:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+  }
+  .node.no-drill { cursor: default; }
+  .node.no-drill:hover { transform: none; box-shadow: none; }
+
+  .node-icon { font-size: 28px; margin-bottom: 6px; }
+  .node-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .node-sub { font-size: 11px; opacity: 0.75; line-height: 1.4; }
+  .node-drill { font-size: 10px; margin-top: 8px; opacity: 0.5; font-style: italic; }
+
+  /* Color themes */
+  .theme-green  { background: #0d2416; border-color: #25D366; box-shadow: 0 4px 20px rgba(37,211,102,0.15); }
+  .theme-blue   { background: #0d1a2e; border-color: #4299e1; box-shadow: 0 4px 20px rgba(66,153,225,0.15); }
+  .theme-orange { background: #2d1a00; border-color: #ed8936; box-shadow: 0 4px 20px rgba(237,137,54,0.15); }
+  .theme-purple { background: #1a0d2e; border-color: #9f7aea; box-shadow: 0 4px 20px rgba(159,122,234,0.15); }
+  .theme-red    { background: #2d0d0d; border-color: #fc8181; box-shadow: 0 4px 20px rgba(252,129,129,0.15); }
+  .theme-teal   { background: #0d2d2a; border-color: #38b2ac; box-shadow: 0 4px 20px rgba(56,178,172,0.15); }
+  .theme-yellow { background: #2d2600; border-color: #ecc94b; box-shadow: 0 4px 20px rgba(236,201,75,0.15); }
+  .theme-gray   { background: #1a1f2e; border-color: #718096; box-shadow: 0 4px 20px rgba(113,128,150,0.15); }
+  .theme-pink   { background: #2d0d1a; border-color: #ed64a6; box-shadow: 0 4px 20px rgba(237,100,166,0.15); }
+
+  .theme-green:hover  { border-color: #4ade80; }
+  .theme-blue:hover   { border-color: #63b3ed; }
+  .theme-orange:hover { border-color: #fba947; }
+  .theme-purple:hover { border-color: #b794f4; }
+  .theme-red:hover    { border-color: #feb2b2; }
+  .theme-teal:hover   { border-color: #4fd1c5; }
+
+  /* ── Flow diagram (sequential steps) ── */
+  .flow-container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .flow-step {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 12px;
+  }
+  .flow-box {
+    flex: 1;
+    border-radius: 10px;
+    padding: 14px 18px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .flow-box:hover {
+    transform: translateX(4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .flow-box.no-drill:hover { transform: none; box-shadow: none; cursor: default; }
+  .flow-box-title { font-size: 14px; font-weight: 700; }
+  .flow-box-sub { font-size: 12px; opacity: 0.7; margin-top: 3px; }
+  .flow-box-detail { font-size: 11px; font-family: 'SF Mono', 'Fira Code', monospace; background: rgba(0,0,0,0.3); border-radius: 4px; padding: 6px 8px; margin-top: 8px; line-height: 1.6; }
+  .flow-arrow-down {
+    text-align: center;
+    color: #4a5568;
+    font-size: 20px;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+
+  /* ── Grid layout for level 2 ── */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+  .grid-card {
+    background: #1a1f2e;
+    border-radius: 12px;
+    padding: 20px;
+    border: 2px solid #2d3748;
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+  }
+  .grid-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+  }
+  .grid-card.no-drill:hover { transform: none; box-shadow: none; cursor: default; }
+  .grid-card-icon { font-size: 24px; margin-bottom: 10px; }
+  .grid-card-title { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+  .grid-card-desc { font-size: 12px; opacity: 0.7; line-height: 1.5; }
+  .grid-card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .tag { font-size: 10px; background: rgba(255,255,255,0.08); border-radius: 4px; padding: 2px 7px; font-family: monospace; }
+
+  /* ── Detail view (level 3) ── */
+  .detail-view {
+    max-width: 860px;
+    margin: 0 auto;
+  }
+  .detail-section {
+    background: #1a1f2e;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    border: 1px solid #2d3748;
+  }
+  .detail-section h3 {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 14px;
+    color: #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .detail-section p { font-size: 13px; line-height: 1.7; color: #a0aec0; margin-bottom: 10px; }
+  .detail-section ul { padding-left: 20px; }
+  .detail-section li { font-size: 13px; line-height: 1.8; color: #a0aec0; }
+  .detail-section li strong { color: #e2e8f0; }
+  .code-block {
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 12px;
+    background: #0f1117;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 10px 0;
+    line-height: 1.7;
+    border: 1px solid #2d3748;
+    overflow-x: auto;
+    color: #a0aec0;
+  }
+  .code-block .kw  { color: #9f7aea; }
+  .code-block .fn  { color: #63b3ed; }
+  .code-block .str { color: #68d391; }
+  .code-block .cm  { color: #4a5568; }
+  .code-block .num { color: #f6ad55; }
+
+  .kv-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .kv-table th { text-align: left; padding: 6px 10px; background: #0f1117; color: #718096; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .kv-table td { padding: 8px 10px; border-top: 1px solid #2d3748; vertical-align: top; }
+  .kv-table td:first-child { color: #63b3ed; font-family: monospace; white-space: nowrap; }
+  .kv-table td:last-child { color: #a0aec0; line-height: 1.5; }
+
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    vertical-align: middle;
+    margin-left: 6px;
+  }
+  .badge-green  { background: #0d2416; color: #25D366; border: 1px solid #25D366; }
+  .badge-blue   { background: #0d1a2e; color: #63b3ed; border: 1px solid #4299e1; }
+  .badge-orange { background: #2d1a00; color: #f6ad55; border: 1px solid #ed8936; }
+  .badge-purple { background: #1a0d2e; color: #b794f4; border: 1px solid #9f7aea; }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #718096; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  /* ── Hint ── */
+  .hint {
+    text-align: center;
+    font-size: 12px;
+    color: #4a5568;
+    margin-bottom: 20px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">mini<span>WA</span></div>
+  <div id="breadcrumb">
+    <span class="crumb active" data-level="l1">System Overview</span>
+  </div>
+  <button class="back-btn" id="back-btn" onclick="goBack()">← Back</button>
+</header>
+
+<div id="canvas">
+  <!-- Diagrams rendered here by JS -->
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════════════════
+const history = [];
+let current = 'l1';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Level definitions
+// ═══════════════════════════════════════════════════════════════════════════
+
+const LEVELS = {
+
+  // ─────────────────────────────────────────────────────────
+  // LEVEL 1 — System Overview
+  // ─────────────────────────────────────────────────────────
+  l1: {
+    label: 'Level 1',
+    title: 'System Overview',
+    render: renderL1
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // LEVEL 2 — Subsystems
+  // ─────────────────────────────────────────────────────────
+  l2_client: {
+    label: 'Level 2 › Browser Client',
+    title: 'Browser Client',
+    render: renderL2Client
+  },
+  l2_phoenix: {
+    label: 'Level 2 › Phoenix Server',
+    title: 'Phoenix Server Internals',
+    render: renderL2Phoenix
+  },
+  l2_kafka: {
+    label: 'Level 2 › Apache Kafka',
+    title: 'Apache Kafka',
+    render: renderL2Kafka
+  },
+  l2_scylla: {
+    label: 'Level 2 › ScyllaDB',
+    title: 'ScyllaDB Schema & Query Patterns',
+    render: renderL2Scylla
+  },
+  l2_minio: {
+    label: 'Level 2 › Media Pipeline',
+    title: 'Media Pipeline (MinIO)',
+    render: renderL2Minio
+  },
+  l2_msgflow: {
+    label: 'Level 2 › Message Flow',
+    title: 'End-to-End Message Flow',
+    render: renderL2MsgFlow
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // LEVEL 3 — Deep dives
+  // ─────────────────────────────────────────────────────────
+  l3_session: {
+    label: 'Level 3 › Session GenServer',
+    title: 'Session GenServer',
+    render: renderL3Session
+  },
+  l3_consumer: {
+    label: 'Level 3 › Kafka Consumer',
+    title: 'Kafka Consumer & Fan-out',
+    render: renderL3Consumer
+  },
+  l3_scylla_schema: {
+    label: 'Level 3 › ScyllaDB Tables',
+    title: 'ScyllaDB Table Design',
+    render: renderL3ScyllaSchema
+  },
+  l3_minio_upload: {
+    label: 'Level 3 › MinIO Upload',
+    title: 'Streaming Upload to MinIO',
+    render: renderL3MinioUpload
+  },
+  l3_delivery: {
+    label: 'Level 3 › Delivery Ticks',
+    title: 'Three-Tick Delivery Protocol',
+    render: renderL3Delivery
+  },
+  l3_pubsub: {
+    label: 'Level 3 › PubSub & Typing',
+    title: 'Phoenix PubSub & Typing Indicators',
+    render: renderL3PubSub
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Navigation
+// ═══════════════════════════════════════════════════════════════════════════
+
+function navigate(levelKey) {
+  if (!LEVELS[levelKey]) return;
+  history.push(current);
+  current = levelKey;
+  renderCurrent();
+}
+
+function goBack() {
+  if (history.length === 0) return;
+  current = history.pop();
+  renderCurrent();
+}
+
+function jumpTo(levelKey) {
+  // Jump from breadcrumb — pop history until we reach it
+  while (history.length > 0 && history[history.length - 1] !== levelKey) {
+    history.pop();
+  }
+  if (history.length > 0) history.pop();
+  current = levelKey;
+  renderCurrent();
+}
+
+function renderCurrent() {
+  const level = LEVELS[current];
+  if (!level) return;
+
+  // Update breadcrumb
+  updateBreadcrumb();
+
+  // Update back button
+  const backBtn = document.getElementById('back-btn');
+  backBtn.classList.toggle('visible', history.length > 0);
+
+  // Render
+  const canvas = document.getElementById('canvas');
+  canvas.innerHTML = '';
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'diagram';
+
+  const label = document.createElement('div');
+  label.className = 'level-label';
+  label.textContent = level.label;
+  wrapper.appendChild(label);
+
+  const title = document.createElement('div');
+  title.className = 'level-title';
+  title.textContent = level.title;
+  wrapper.appendChild(title);
+
+  level.render(wrapper);
+  canvas.appendChild(wrapper);
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => wrapper.classList.add('visible'));
+  });
+}
+
+function updateBreadcrumb() {
+  const bc = document.getElementById('breadcrumb');
+  bc.innerHTML = '';
+
+  // Build path from history + current
+  const path = [...history, current];
+  path.forEach((key, i) => {
+    const level = LEVELS[key];
+    if (!level) return;
+    const isLast = i === path.length - 1;
+
+    // Shorten breadcrumb label for display
+    const shortLabel = level.label.split(' › ').pop();
+
+    const crumb = document.createElement('span');
+    crumb.className = 'crumb' + (isLast ? ' active' : '');
+    crumb.textContent = shortLabel;
+    if (!isLast) {
+      crumb.onclick = () => { jumpTo(key); };
+    }
+    bc.appendChild(crumb);
+
+    if (!isLast) {
+      const sep = document.createElement('span');
+      sep.className = 'crumb-sep';
+      sep.textContent = '›';
+      bc.appendChild(sep);
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Helper builders
+// ═══════════════════════════════════════════════════════════════════════════
+
+function makeHint(text) {
+  const h = document.createElement('div');
+  h.className = 'hint';
+  h.textContent = text;
+  return h;
+}
+
+function makeFlowStep(title, sub, detail, theme, drill, noDrill) {
+  const step = document.createElement('div');
+
+  const box = document.createElement('div');
+  box.className = 'flow-box theme-' + theme + (noDrill ? ' no-drill' : '');
+  box.innerHTML = `<div class="flow-box-title">${title}</div><div class="flow-box-sub">${sub}</div>` + (detail ? `<div class="flow-box-detail">${detail}</div>` : '');
+  if (drill && !noDrill) box.onclick = () => navigate(drill);
+  step.appendChild(box);
+  return step;
+}
+
+function makeArrowDown() {
+  const a = document.createElement('div');
+  a.className = 'flow-arrow-down';
+  a.textContent = '↓';
+  return a;
+}
+
+function makeGridCard(icon, title, desc, tags, theme, drill) {
+  const card = document.createElement('div');
+  card.className = 'grid-card' + (drill ? '' : ' no-drill');
+  card.style.borderColor = themeColor(theme);
+  card.innerHTML = `
+    <div class="grid-card-icon">${icon}</div>
+    <div class="grid-card-title">${title}</div>
+    <div class="grid-card-desc">${desc}</div>
+    <div class="grid-card-tags">${tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+  `;
+  if (drill) card.onclick = () => navigate(drill);
+  return card;
+}
+
+function themeColor(theme) {
+  const map = { green:'#25D366', blue:'#4299e1', orange:'#ed8936', purple:'#9f7aea', red:'#fc8181', teal:'#38b2ac', yellow:'#ecc94b', pink:'#ed64a6', gray:'#718096' };
+  return map[theme] || '#718096';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L1 — System Overview
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderL1(wrapper) {
+  wrapper.appendChild(makeHint('Click any component to zoom in'));
+
+  // We'll render an SVG-based diagram with absolute positioned nodes
+  // Using a relative container with fixed height
+  const container = document.createElement('div');
+  container.style.cssText = 'position:relative; max-width:980px; margin:0 auto; height:520px;';
+
+  // SVG for arrows
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;';
+  container.appendChild(svg);
+
+  // Node definitions: [id, x%, y%, w, icon, title, sub, theme, drill]
+  const nodes = [
+    // Row 1: Client
+    { id:'client',  x:40, y:20,  w:220, icon:'🌐', title:'Browser Client', sub:'Phoenix.js · WebSocket · vanilla JS', theme:'green', drill:'l2_client' },
+    // Row 2: Phoenix server (center)
+    { id:'phoenix', x:38, y:44,  w:240, icon:'⚡', title:'Phoenix Server', sub:'Channels · Sessions · PubSub · Router', theme:'blue', drill:'l2_phoenix' },
+    // Row 3 spread
+    { id:'kafka',   x:10, y:68,  w:210, icon:'📨', title:'Apache Kafka', sub:'Message queue · ordered per conversation', theme:'orange', drill:'l2_kafka' },
+    { id:'scylla',  x:40, y:68,  w:210, icon:'🗄️', title:'ScyllaDB', sub:'6 CQL tables · partition by query pattern', theme:'purple', drill:'l2_scylla' },
+    { id:'minio',   x:70, y:68,  w:210, icon:'🪣', title:'MinIO', sub:'S3-compatible blob storage · public-read bucket', theme:'teal', drill:'l2_minio' },
+  ];
+
+  nodes.forEach(n => {
+    const el = document.createElement('div');
+    el.className = `node theme-${n.theme}`;
+    el.id = 'node-' + n.id;
+    el.style.cssText = `left:${n.x}%;top:${n.y}%;width:${n.w}px;transform:translateX(-50%);`;
+    el.innerHTML = `
+      <div class="node-icon">${n.icon}</div>
+      <div class="node-title">${n.title}</div>
+      <div class="node-sub">${n.sub}</div>
+      <div class="node-drill">click to zoom in ›</div>
+    `;
+    el.onclick = () => navigate(n.drill);
+    container.appendChild(el);
+  });
+
+  // Also add a "Message Flow" shortcut in the center
+  const flowBtn = document.createElement('div');
+  flowBtn.className = 'node theme-yellow';
+  flowBtn.style.cssText = 'left:76%;top:43%;width:190px;transform:translateX(-50%);';
+  flowBtn.innerHTML = `
+    <div class="node-icon">🔄</div>
+    <div class="node-title">Message Flow</div>
+    <div class="node-sub">End-to-end message path</div>
+    <div class="node-drill">click to zoom in ›</div>
+  `;
+  flowBtn.onclick = () => navigate('l2_msgflow');
+  container.appendChild(flowBtn);
+
+  wrapper.appendChild(container);
+
+  // Draw arrows after DOM is ready
+  setTimeout(() => drawL1Arrows(svg, container), 50);
+
+  // Legend
+  const legend = document.createElement('div');
+  legend.className = 'legend';
+  legend.style.marginTop = '32px';
+  legend.innerHTML = `
+    <div class="legend-item"><div class="legend-dot" style="background:#25D366"></div>Frontend</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#4299e1"></div>Application Server</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ed8936"></div>Message Queue</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#9f7aea"></div>Database</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#38b2ac"></div>Blob Storage</div>
+  `;
+  wrapper.appendChild(legend);
+}
+
+function drawL1Arrows(svg, container) {
+  const rect = container.getBoundingClientRect();
+
+  function nodeCenter(id) {
+    const el = document.getElementById('node-' + id);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return {
+      x: r.left - rect.left + r.width / 2,
+      y: r.top  - rect.top  + r.height / 2,
+      top: r.top - rect.top,
+      bottom: r.top - rect.top + r.height,
+      left: r.left - rect.left,
+      right: r.left - rect.left + r.width,
+      w: r.width,
+      h: r.height,
+    };
+  }
+
+  const arrows = [
+    // client ↔ phoenix: WebSocket
+    { from:'client', to:'phoenix', label:'WebSocket\n(Phoenix Channel)', color:'#25D366', bidirectional:true },
+    // phoenix → kafka: produce
+    { from:'phoenix', to:'kafka', label:'produce\n(brod)', color:'#ed8936', bidirectional:false },
+    // kafka → phoenix: consume
+    { from:'kafka', to:'phoenix', label:'consume\n(brod_group_subscriber)', color:'#f6ad55', bidirectional:false, offset:-30 },
+    // phoenix ↔ scylla
+    { from:'phoenix', to:'scylla', label:'CQL (Xandra)', color:'#9f7aea', bidirectional:true },
+    // phoenix → minio
+    { from:'phoenix', to:'minio', label:'S3 API\n(ExAws)', color:'#38b2ac', bidirectional:false },
+    // minio → client: direct HTTP for media
+    { from:'minio', to:'client', label:'HTTP GET\n(media files)', color:'#4fd1c5', bidirectional:false },
+  ];
+
+  svg.innerHTML = '<defs>' +
+    arrows.map((a, i) => `
+      <marker id="ah${i}" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6 Z" fill="${a.color}" opacity="0.7"/>
+      </marker>
+    `).join('') +
+    '</defs>';
+
+  arrows.forEach((arrow, i) => {
+    const fc = nodeCenter(arrow.from);
+    const tc = nodeCenter(arrow.to);
+    if (!fc || !tc) return;
+
+    // Determine connection points (top/bottom/left/right of nodes)
+    let x1, y1, x2, y2;
+
+    const dx = tc.x - fc.x;
+    const dy = tc.y - fc.y;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+
+    if (absDy > absDx) {
+      // Mostly vertical
+      if (dy > 0) {
+        y1 = fc.bottom; x1 = fc.x + (arrow.offset || 0);
+        y2 = tc.top;    x2 = tc.x + (arrow.offset || 0);
+      } else {
+        y1 = fc.top;    x1 = fc.x + (arrow.offset || 0);
+        y2 = tc.bottom; x2 = tc.x + (arrow.offset || 0);
+      }
+    } else {
+      // Mostly horizontal
+      if (dx > 0) {
+        x1 = fc.right; y1 = fc.y;
+        x2 = tc.left;  y2 = tc.y;
+      } else {
+        x1 = fc.left;  y1 = fc.y;
+        x2 = tc.right; y2 = tc.y;
+      }
+    }
+
+    // Draw path
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const mx = (x1 + x2) / 2;
+    const my = (y1 + y2) / 2;
+    const d = `M ${x1} ${y1} Q ${mx} ${y1} ${x2} ${y2}`;
+    path.setAttribute('d', d);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', arrow.color);
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('stroke-opacity', '0.6');
+    path.setAttribute('marker-end', `url(#ah${i})`);
+    if (arrow.bidirectional) {
+      path.setAttribute('marker-start', `url(#ah${i})`);
+    }
+    path.setAttribute('stroke-dasharray', '6,4');
+    svg.appendChild(path);
+
+    // Label
+    const lines = arrow.label.split('\n');
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', mx + (arrow.offset || 0));
+    text.setAttribute('y', my - 6);
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('font-size', '10');
+    text.setAttribute('fill', arrow.color);
+    text.setAttribute('opacity', '0.8');
+    lines.forEach((line, li) => {
+      const tspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+      tspan.setAttribute('x', mx + (arrow.offset || 0));
+      tspan.setAttribute('dy', li === 0 ? 0 : 12);
+      tspan.textContent = line;
+      text.appendChild(tspan);
+    });
+    svg.appendChild(text);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L2 — Browser Client
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderL2Client(wrapper) {
+  wrapper.appendChild(makeHint('The entire UI is a single vanilla JS file — no framework'));
+
+  const grid = document.createElement('div');
+  grid.className = 'grid-2';
+
+  const cards = [
+    { icon:'🔌', title:'WebSocket (Phoenix.js)', desc:'Connects to /socket?user_id=X. Joins "message:lobby" channel. Handles reconnect automatically.', tags:['Phoenix.Socket', 'Phoenix.Channel', 'heartbeat'], theme:'green', drill:null },
+    { icon:'📤', title:'Send Message', desc:'Captures text + optional media. Pushes to channel with client_sent_at timestamp for E2E latency tracking. Stores in localStorage.', tags:['channel.push()', 'sendTimeMap', 'localStorage'], theme:'blue', drill:null },
+    { icon:'📥', title:'Receive Message', desc:'Listens for "msg" events. Renders bubbles with media support (img/audio/video). Computes and displays latency breakdown.', tags:['msg event', 'mediaHtml()', 'E2E latency'], theme:'purple', drill:null },
+    { icon:'📎', title:'Media Upload', desc:'File picker → XHR POST /api/upload → progress bar → pendingMedia state. Client-side guard: 200MB max. Sends URL in message.', tags:['XHR', 'FormData', 'progress events'], theme:'teal', drill:null },
+    { icon:'💬', title:'Typing Indicator', desc:'Pushes "typing" event on keydown. Receives "typing" event via PubSub broadcast. Auto-clears after 2s.', tags:['typing event', 'debounce', 'PubSub'], theme:'orange', drill:null },
+    { icon:'🏷️', title:'Conversation State', desc:'activeConv = userId (1:1) or groupUUID (group). localStorage key: miniwa_msgs_<myId>_<convId>. Groups discovered via "groups" push on join.', tags:['activeConv', 'activeConvType', 'localStorage'], theme:'yellow', drill:null },
+  ];
+
+  cards.forEach(c => grid.appendChild(makeGridCard(c.icon, c.title, c.desc, c.tags, c.theme, c.drill)));
+  wrapper.appendChild(grid);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L2 — Phoenix Server
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderL2Phoenix(wrapper) {
+  wrapper.appendChild(makeHint('Click Session GenServer or PubSub to zoom in further'));
+
+  const grid = document.createElement('div');
+  grid.className = 'grid-2';
+
+  const cards = [
+    { icon:'🔌', title:'UserSocket', desc:'Authenticates WebSocket connections by user_id query param. Assigns user_id to socket. Entry point for all clients.', tags:['connect/3', 'id/1', 'user_id'], theme:'green', drill:null },
+    { icon:'📡', title:'MessageChannel', desc:'Handles channel pushes (send_msg, delivered, read, typing). Receives process messages and pushes to client. Monitors Session process.', tags:['handle_in', 'handle_info', 'push/3'], theme:'blue', drill:null },
+    { icon:'⚙️', title:'Session GenServer', desc:'One per connected user. Owns Kafka publish, tick propagation, offline queue drain. Registered in Registry by user_id.', tags:['GenServer', 'Registry', 'handle_cast'], theme:'purple', drill:'l3_session' },
+    { icon:'🗂️', title:'DynamicSupervisor', desc:'Supervises all Session processes with restart: :temporary. Sessions die with the channel; supervisor stays alive.', tags:['DynamicSupervisor', 'temporary', 'start_child'], theme:'orange', drill:null },
+    { icon:'📢', title:'Phoenix PubSub', desc:'In-process pub/sub for ephemeral events: typing indicators, cross-process delivery. Zero persistence — purely in-memory.', tags:['broadcast', 'subscribe', 'typing:user:X'], theme:'teal', drill:'l3_pubsub' },
+    { icon:'🧭', title:'Router & Upload Controller', desc:'POST /api/upload → UploadController → Media.upload/1 → MinIO. Returns {url, media_type} JSON. Standard Phoenix pipeline.', tags:['Router', 'UploadController', ':api pipeline'], theme:'yellow', drill:null },
+  ];
+
+  cards.forEach(c => grid.appendChild(makeGridCard(c.icon, c.title, c.desc, c.tags, c.theme, c.drill)));
+  wrapper.appendChild(grid);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L2 — Kafka
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderL2Kafka(wrapper) {
+  wrapper.appendChild(makeHint('Click Consumer to see fan-out and delivery logic'));
+
+  const grid = document.createElement('div');
+  grid.className = 'grid-2';
+
+  const cards = [
+    { icon:'📬', title:'Topic: messages', desc:'Single Kafka topic for all message types (1:1 and group). Partition count determines parallelism.', tags:['topic:messages', 'JSON payload', 'retention'], theme:'orange', drill:null },
+    { icon:'🔑', title:'Partition Key', desc:'Partition key = conversation_id. Ensures all messages in a conversation land on the same partition → strict ordering per conversation.', tags:['conversation_id', 'ordering guarantee', 'hash partition'], theme:'yellow', drill:null },
+    { icon:'📤', title:'Producer (brod)', desc:'Synchronous publish via brod.produce_sync/5. Fires tick-1 back to sender after ACK. Blocks until broker confirms.', tags:['brod.produce_sync', 'tick-1', 'ACK'], theme:'green', drill:null },
+    { icon:'📥', title:'Consumer (brod_group_subscriber_v2)', desc:'Consumer group reads messages, routes by type field: 1:1 → direct delivery, group → fan-out to all members.', tags:['group_subscriber_v2', 'consumer_group', 'handle_message'], theme:'blue', drill:'l3_consumer' },
+    { icon:'♟️', title:'Consumer Group Offset', desc:'Committed per partition after successful delivery. Replay possible by resetting offsets. Enables at-least-once delivery semantics.', tags:['offset commit', 'at-least-once', 'replay'], theme:'purple', drill:null },
+    { icon:'🚀', title:'Startup Retry', desc:'Consumer polls until the "messages" topic exists before starting. Uses exponential backoff to handle Kafka not yet ready at boot.', tags:['exponential backoff', 'topic existence', 'boot resilience'], theme:'teal', drill:null },
+  ];
+
+  cards.forEach(c => grid.appendChild(makeGridCard(c.icon, c.title, c.desc, c.tags, c.theme, c.drill)));
+  wrapper.appendChild(grid);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L2 — ScyllaDB
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderL2Scylla(wrapper) {
+  wrapper.appendChild(makeHint('Click "Table Design" to see full schema and query patterns'));
+
+  const grid = document.createElement('div');
+  grid.className = 'grid-2';
+
+  const cards = [
+    { icon:'🗃️', title:'Table Design', desc:'6 tables, each designed around a single query pattern — Cassandra/Scylla best practice. No joins; denormalize instead.', tags:['6 tables', 'query-driven', 'no Ecto'], theme:'purple', drill:'l3_scylla_schema' },
+    { icon:'💬', title:'messages', desc:'Durable log. Partition by conversation_id (all messages for a conv on same node). Cluster by message_id (lex = chronological).', tags:['conversation_id', 'message_id', 'history queries'], theme:'blue', drill:null },
+    { icon:'📭', title:'undelivered_messages', desc:'Offline queue. Partition by recipient_id so drain query is a single partition read. Deleted after delivery.', tags:['recipient_id', 'offline queue', 'drain on connect'], theme:'orange', drill:null },
+    { icon:'👥', title:'Groups & Members', desc:'groups: metadata. group_members: partition by group_id for fan-out lookup. user_groups: partition by user_id for sidebar.', tags:['group_id', 'user_id', 'fan-out'], theme:'teal', drill:null },
+    { icon:'🕰️', title:'Message ID Design', desc:'12-char zero-padded hex millisecond timestamp + 8-char random hex. Lexicographic order = chronological order. No extra sort needed.', tags:['time-ordered', 'hex ms', 'clustering key'], theme:'yellow', drill:null },
+    { icon:'🔢', title:'Xandra Typed Params', desc:'Every CQL parameter must be a {type, value} tuple. Bare values raise FunctionClauseError at runtime. Non-negotiable quirk.', tags:['{\"text\", val}', '{\"bigint\", ts}', 'typed tuples'], theme:'red', drill:null },
+  ];
+
+  cards.forEach(c => grid.appendChild(makeGridCard(c.icon, c.title, c.desc, c.tags, c.theme, c.drill)));
+  wrapper.appendChild(grid);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L2 — MinIO / Media Pipeline
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderL2Minio(wrapper) {
+  wrapper.appendChild(makeHint('Click "Streaming Upload" to see the upload implementation detail'));
+
+  const grid = document.createElement('div');
+  grid.className = 'grid-2';
+
+  const cards = [
+    { icon:'📤', title:'Upload Flow', desc:'Browser → XHR POST /api/upload (multipart) → UploadController → Media.upload/1 → MinIO. Returns public URL + media_type.', tags:['POST /api/upload', 'multipart', 'ExAws'], theme:'teal', drill:'l3_minio_upload' },
+    { icon:'🪣', title:'Bucket: mini-wa-media', desc:'Auto-created on mix setup. Public-read S3 policy so browsers can GET media directly without Phoenix proxying.', tags:['public-read', 'setup!', 'bucket policy'], theme:'blue', drill:null },
+    { icon:'🔗', title:'Public URL', desc:'http://localhost:9000/mini-wa-media/<uuid>.<ext>. Embedded in message payload. Browser fetches direct from MinIO — Phoenix not in the read path.', tags:['direct serve', 'CDN-ready', 'no proxy'], theme:'green', drill:null },
+    { icon:'📦', title:'Streaming (5 MB chunks)', desc:'ExAws.S3.Upload.stream_file reads in 5 MB chunks. Memory usage stays flat for 200 MB videos. No temp copy on Phoenix.', tags:['stream_file', 'multipart S3', '5MB chunks'], theme:'orange', drill:null },
+    { icon:'🛡️', title:'Limits & Validation', desc:'Plug.Parsers: 200 MB max body. Media.upload: 50 MB soft limit (hard limit is Plug). Type validated: image/audio/video only.', tags:['200MB Plug limit', '50MB soft', 'content-type check'], theme:'red', drill:null },
+    { icon:'🐳', title:'Docker Setup', desc:'Runs in Docker alongside Kafka + ScyllaDB. Ports 9000 (API) and 9001 (console). Credentials: minioadmin/minioadmin.', tags:['docker-compose', 'minio/minio:latest', '9000/9001'], theme:'yellow', drill:null },
+  ];
+
+  cards.forEach(c => grid.appendChild(makeGridCard(c.icon, c.title, c.desc, c.tags, c.theme, c.drill)));
+  wrapper.appendChild(grid);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L2 — Message Flow (E2E)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderL2MsgFlow(wrapper) {
+  wrapper.appendChild(makeHint('Click any step to see its implementation details'));
+
+  const flow = document.createElement('div');
+  flow.className = 'flow-container';
+
+  const steps = [
+    {
+      title: '① Browser pushes "send_msg"',
+      sub: 'Browser Client',
+      detail: 'channel.push("send_msg", {content, to, client_id, client_sent_at, media_url, media_type})',
+      theme: 'green', drill: 'l2_client'
+    },
+    {
+      title: '② MessageChannel.handle_in("send_msg")',
+      sub: 'Phoenix Channel',
+      detail: 'Extracts fields → calls Session.send_message/7',
+      theme: 'blue', drill: 'l2_phoenix'
+    },
+    {
+      title: '③ Session.send_message → Producer.publish',
+      sub: 'Session GenServer + Kafka Producer',
+      detail: 'Stamps kafka_published_at_ms → brod.produce_sync(topic, conv_id, payload) → Kafka ACK',
+      theme: 'orange', drill: 'l3_session'
+    },
+    {
+      title: '④ tick-1 fired to sender',
+      sub: 'Delivery Tick 1',
+      detail: 'Session receives {:kafka_ack} → cast(:tick1) → Channel pushes "tick1" to browser (one checkmark ✓)',
+      theme: 'yellow', drill: 'l3_delivery'
+    },
+    {
+      title: '⑤ Consumer.handle_message',
+      sub: 'Kafka Consumer',
+      detail: 'Reads from broker → DB.insert_message (ScyllaDB) → route by type: 1:1 vs group',
+      theme: 'purple', drill: 'l3_consumer'
+    },
+    {
+      title: '⑥ Deliver to recipient Session',
+      sub: 'Session GenServer',
+      detail: 'Registry.lookup(recipient_id) → recipient Session.deliver → Channel.handle_info({:incoming_message}) → push "msg" to browser',
+      theme: 'blue', drill: 'l3_session'
+    },
+    {
+      title: '⑦ tick-2: delivered',
+      sub: 'Delivery Tick 2',
+      detail: 'Recipient browser receives "msg" → pushes "delivered" → sender gets tick-2 (two checkmarks ✓✓)',
+      theme: 'teal', drill: 'l3_delivery'
+    },
+    {
+      title: '⑧ tick-3: read',
+      sub: 'Delivery Tick 3',
+      detail: 'Recipient opens conversation → pushes "read" → sender gets tick-3 (blue checkmarks ✓✓)',
+      theme: 'green', drill: 'l3_delivery'
+    },
+  ];
+
+  steps.forEach((step, i) => {
+    flow.appendChild(makeFlowStep(step.title, step.sub, step.detail, step.theme, step.drill, false));
+    if (i < steps.length - 1) flow.appendChild(makeArrowDown());
+  });
+
+  wrapper.appendChild(flow);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L3 — Session GenServer
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderL3Session(wrapper) {
+  const view = document.createElement('div');
+  view.className = 'detail-view';
+
+  view.innerHTML = `
+    <div class="detail-section">
+      <h3>🧠 What It Does</h3>
+      <p>One <strong>Session GenServer</strong> runs per connected user. It is the central coordinator for everything that happens on behalf of a user: publishing to Kafka, receiving ticks, and delivering messages from the consumer.</p>
+      <ul>
+        <li><strong>Registered</strong> in <code>MiniWa.Presence.Registry</code> (ETS) under <code>user_id</code></li>
+        <li><strong>Supervised</strong> by <code>DynamicSupervisor</code> with <code>restart: :temporary</code> — dies when channel dies</li>
+        <li><strong>Monitors</strong> the channel process — stops itself when connection drops</li>
+      </ul>
+    </div>
+
+    <div class="detail-section">
+      <h3>📦 State</h3>
+      <div class="code-block">
+<span class="cm">%{</span>
+  user_id:    <span class="str">"alice"</span>,          <span class="cm"># who this session belongs to</span>
+  channel_pid: #PID&lt;0.123.0&gt;,  <span class="cm"># monitored channel process</span>
+<span class="cm">}</span>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <h3>🔄 Key Casts</h3>
+      <table class="kv-table">
+        <tr><th>Message</th><th>What it does</th></tr>
+        <tr><td>{:send_message, to, content, client_id, client_sent_at, media_url, media_type}</td><td>Stamps kafka_published_at_ms, builds message map, calls Producer.publish/1, then sends {:tick1} to self</td></tr>
+        <tr><td>{:send_group_message, group_id, content, …}</td><td>Same as above but conversation_id = group_id, type = "group"</td></tr>
+        <tr><td>{:deliver, message}</td><td>Called by consumer when recipient is online. Sends handle_info to channel pid.</td></tr>
+        <tr><td>{:tick1, msg}</td><td>Pushes tick-1 event to channel (Kafka ACK confirmation)</td></tr>
+        <tr><td>{:notify_delivered, msg_id}</td><td>Pushes tick-2 to sender channel</td></tr>
+        <tr><td>{:notify_read, msg_id}</td><td>Pushes tick-3 to sender channel</td></tr>
+      </table>
+    </div>
+
+    <div class="detail-section">
+      <h3>📬 Offline Queue Drain</h3>
+      <p>On Session init, calls <code>DB.fetch_undelivered(user_id)</code> and delivers all queued messages immediately. This handles messages sent while the user was offline.</p>
+      <div class="code-block">
+<span class="kw">def</span> <span class="fn">init</span>(state) <span class="kw">do</span>
+  undelivered = DB.fetch_undelivered(state.user_id)
+  Enum.each(undelivered, <span class="kw">fn</span> msg ->
+    send(state.channel_pid, {:incoming_message, msg})
+  <span class="kw">end</span>)
+  {:ok, state}
+<span class="kw">end</span>
+      </div>
+    </div>
+  `;
+
+  wrapper.appendChild(view);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L3 — Kafka Consumer & Fan-out
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderL3Consumer(wrapper) {
+  const view = document.createElement('div');
+  view.className = 'detail-view';
+
+  view.innerHTML = `
+    <div class="detail-section">
+      <h3>📥 brod_group_subscriber_v2</h3>
+      <p>Uses Kafka's group consumer protocol. All consumer instances share a consumer group ID so each partition is owned by exactly one consumer at a time — no duplicate delivery.</p>
+      <ul>
+        <li>Implements <strong>handle_message/4</strong> callback</li>
+        <li>Decodes JSON payload, routes on <code>type</code> field</li>
+        <li>Commits offset <em>after</em> delivery — at-least-once semantics</li>
+      </ul>
+    </div>
+
+    <div class="detail-section">
+      <h3>🔀 Routing Logic</h3>
+      <div class="code-block">
+<span class="kw">def</span> <span class="fn">handle_message</span>(_topic, _partition, msg, state) <span class="kw">do</span>
+  payload = Jason.decode!(msg.value)
+  <span class="kw">case</span> payload[<span class="str">"type"</span>] <span class="kw">do</span>
+    <span class="str">"group"</span> -> process_group(payload)
+    _       -> process_1to1(payload)
+  <span class="kw">end</span>
+  {:ok, :commit, state}
+<span class="kw">end</span>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <h3>👤 1:1 Delivery</h3>
+      <p><strong>process_1to1/1</strong>: Persists to ScyllaDB <code>messages</code> table. Then looks up recipient in Registry:</p>
+      <ul>
+        <li>If <strong>online</strong>: <code>Session.deliver(pid, message)</code> → sends to channel → browser</li>
+        <li>If <strong>offline</strong>: <code>DB.insert_undelivered(recipient_id, message)</code> → drained on next connect</li>
+      </ul>
+    </div>
+
+    <div class="detail-section">
+      <h3>👥 Group Fan-out</h3>
+      <p><strong>process_group/1</strong>: Writes message once to <code>messages</code> table, then fans out to all group members concurrently:</p>
+      <div class="code-block">
+members = DB.get_group_members(group_id)
+Task.async_stream_nolink(members, <span class="kw">fn</span> member_id ->
+  deliver_or_queue(member_id, message)
+<span class="kw">end</span>, max_concurrency: <span class="num">50</span>, ordered: <span class="kw">false</span>)
+|> Stream.run()
+      </div>
+      <p>Max 50 concurrent deliveries. Uses <code>async_stream_nolink</code> so a single failed delivery doesn't crash the consumer.</p>
+    </div>
+  `;
+
+  wrapper.appendChild(view);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L3 — ScyllaDB Schema
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderL3ScyllaSchema(wrapper) {
+  const view = document.createElement('div');
+  view.className = 'detail-view';
+
+  view.innerHTML = `
+    <div class="detail-section">
+      <h3>🗃️ messages</h3>
+      <p>Durable log for all messages. Partition by <code>conversation_id</code> → all messages in one conversation on one node. Cluster by <code>message_id</code> (time-ordered lex).</p>
+      <div class="code-block">
+CREATE TABLE messages (
+  conversation_id  text,
+  message_id       text,
+  sender_id        text,
+  recipient_id     text,
+  content          text,
+  sent_at          text,
+  media_url        text,
+  media_type       text,
+  PRIMARY KEY (conversation_id, message_id)
+) WITH CLUSTERING ORDER BY (message_id ASC);
+      </div>
+      <p><strong>Query:</strong> <code>SELECT * FROM messages WHERE conversation_id = ? ORDER BY message_id ASC LIMIT 50</code></p>
+    </div>
+
+    <div class="detail-section">
+      <h3>📭 undelivered_messages</h3>
+      <p>Offline queue per recipient. Partition by <code>recipient_id</code> → single-partition range scan on reconnect. Deleted after delivery.</p>
+      <div class="code-block">
+CREATE TABLE undelivered_messages (
+  recipient_id  text,
+  message_id    text,
+  sender_id     text,
+  content       text,
+  sent_at       text,
+  media_url     text,
+  media_type    text,
+  PRIMARY KEY (recipient_id, message_id)
+) WITH CLUSTERING ORDER BY (message_id ASC);
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <h3>👥 Group Tables</h3>
+      <table class="kv-table">
+        <tr><th>Table</th><th>Partition Key</th><th>Purpose</th></tr>
+        <tr><td>users</td><td>user_id</td><td>Registered user lookup</td></tr>
+        <tr><td>groups</td><td>group_id</td><td>Group name / metadata</td></tr>
+        <tr><td>group_members</td><td>group_id</td><td>Fan-out: who to deliver to</td></tr>
+        <tr><td>user_groups</td><td>user_id</td><td>Sidebar: which groups does user belong to</td></tr>
+      </table>
+    </div>
+
+    <div class="detail-section">
+      <h3>🕰️ Message ID Format</h3>
+      <div class="code-block">
+<span class="cm"># 12-char zero-padded hex millisecond timestamp + 8-char random hex</span>
+ts  = System.system_time(:millisecond)
+hex = Integer.to_string(ts, 16) |> String.pad_leading(12, "0")
+rnd = :crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)
+id  = hex <> rnd
+<span class="cm"># e.g. "018f4a3c2b80a1b2c3d4"</span>
+<span class="cm"># Lexicographic sort = chronological sort</span>
+<span class="cm"># → no extra ORDER BY needed in Cassandra clustering</span>
+      </div>
+    </div>
+  `;
+
+  wrapper.appendChild(view);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L3 — MinIO Upload
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderL3MinioUpload(wrapper) {
+  const view = document.createElement('div');
+  view.className = 'detail-view';
+
+  view.innerHTML = `
+    <div class="detail-section">
+      <h3>🌊 Streaming S3 Upload</h3>
+      <p>Uses <code>ExAws.S3.Upload.stream_file/2</code> to read the file in 5 MB chunks and upload as an S3 multipart upload. Phoenix writes the multipart body to a temp file on disk — so memory usage stays flat even for 200 MB videos.</p>
+      <div class="code-block">
+path
+|> ExAws.S3.Upload.stream_file(chunk_size: <span class="num">5 * 1024 * 1024</span>)
+|> ExAws.S3.upload(bucket, key,
+     content_type: content_type,
+     timeout: <span class="num">300_000</span>)
+|> ExAws.request()
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <h3>🔑 Key Generation</h3>
+      <div class="code-block">
+ext = Path.extname(orig) |> String.downcase()
+key = :crypto.strong_rand_bytes(<span class="num">16</span>)
+      |> Base.encode16(case: :lower)
+      |> Kernel.<>(<span class="str">"#{ext}"</span>)
+<span class="cm"># e.g. "a3f8e2c1d4b5a6e7f8c9d0e1f2a3b4c5.mp4"</span>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <h3>🌐 Public URL</h3>
+      <p>After upload: <code>http://localhost:9000/mini-wa-media/&lt;key&gt;</code></p>
+      <p>Bucket has an S3 public-read policy — browsers fetch media directly from MinIO without going through Phoenix. Phoenix is not in the hot read path.</p>
+    </div>
+
+    <div class="detail-section">
+      <h3>📊 Client Progress Bar</h3>
+      <p>JavaScript uses <code>XMLHttpRequest</code> (not fetch) to get <code>upload.onprogress</code> events. The blue progress bar updates in real time as chunks are sent.</p>
+      <div class="code-block">
+xhr.upload.onprogress = (e) => {
+  <span class="kw">if</span> (e.lengthComputable) {
+    <span class="kw">const</span> pct = Math.round(e.loaded / e.total * <span class="num">100</span>);
+    progressBar.style.width = pct + <span class="str">"%"</span>;
+  }
+};
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <h3>🛡️ Limits</h3>
+      <table class="kv-table">
+        <tr><th>Limit</th><th>Where enforced</th><th>Value</th></tr>
+        <tr><td>Max body size</td><td>Plug.Parsers (endpoint.ex)</td><td>200 MB</td></tr>
+        <tr><td>Soft limit</td><td>Media.check_size/1</td><td>50 MB (returns error)</td></tr>
+        <tr><td>Client guard</td><td>app.js openFilePicker</td><td>200 MB</td></tr>
+        <tr><td>File types</td><td>Media.detect_type/1</td><td>image/*, audio/*, video/*</td></tr>
+        <tr><td>Upload timeout</td><td>ExAws request</td><td>300 seconds</td></tr>
+      </table>
+    </div>
+  `;
+
+  wrapper.appendChild(view);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L3 — Three-Tick Delivery
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderL3Delivery(wrapper) {
+  const view = document.createElement('div');
+  view.className = 'detail-view';
+
+  view.innerHTML = `
+    <div class="detail-section">
+      <h3>✓ Tick-1 — Kafka ACK</h3>
+      <p>Fires immediately after <code>brod.produce_sync</code> returns. Signals the message left the client and was accepted by Kafka. Displayed as a single grey checkmark.</p>
+      <ul>
+        <li>Session receives <code>{:tick1, msg}</code> internally</li>
+        <li>Pushes <code>"tick1"</code> event to sender's channel → browser</li>
+        <li>Payload includes <code>kafka_published_at_ms</code> for latency breakdown</li>
+      </ul>
+    </div>
+
+    <div class="detail-section">
+      <h3>✓✓ Tick-2 — Device Delivered</h3>
+      <p>Fires when the recipient's browser receives the "msg" event. Signals the message was delivered to the recipient's device.</p>
+      <ul>
+        <li>Recipient browser receives <code>"msg"</code> → pushes <code>"delivered"</code> back</li>
+        <li>Channel.handle_in("delivered") → <code>Session.notify_delivered(sender_id, msg_id)</code></li>
+        <li>Sender's Session casts <code>{:tick2}</code> → pushes <code>"tick2"</code> to sender browser</li>
+      </ul>
+    </div>
+
+    <div class="detail-section">
+      <h3>✓✓ Tick-3 — Read</h3>
+      <p>Fires when the recipient opens the conversation. Signals the message was seen.</p>
+      <ul>
+        <li>Recipient switches to conversation → browser pushes <code>"read"</code></li>
+        <li>Channel.handle_in("read") → <code>Session.notify_read(sender_id, msg_id)</code></li>
+        <li>Sender's Session pushes <code>"tick3"</code> → blue checkmarks in UI</li>
+      </ul>
+    </div>
+
+    <div class="detail-section">
+      <h3>📊 E2E Latency Breakdown</h3>
+      <table class="kv-table">
+        <tr><th>Label in UI</th><th>Measures</th><th>Timestamps used</th></tr>
+        <tr><td>ws+kafka</td><td>Client send → Kafka ACK</td><td>client_sent_at → tick1 received</td></tr>
+        <tr><td>consumer</td><td>Kafka ACK → consumer delivery</td><td>kafka_published_at_ms → delivered_at_ms</td></tr>
+        <tr><td>server</td><td>Consumer → client receive</td><td>delivered_at_ms → msg received in browser</td></tr>
+        <tr><td>e2e≈</td><td>Total end-to-end</td><td>client_sent_at → msg received in browser</td></tr>
+      </table>
+    </div>
+  `;
+
+  wrapper.appendChild(view);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// L3 — Phoenix PubSub & Typing
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderL3PubSub(wrapper) {
+  const view = document.createElement('div');
+  view.className = 'detail-view';
+
+  view.innerHTML = `
+    <div class="detail-section">
+      <h3>📢 Phoenix PubSub</h3>
+      <p>An in-process ETS-backed pub/sub bus. Used for ephemeral, low-latency events that do not need to be persisted or routed through Kafka.</p>
+      <ul>
+        <li>Topic format: <code>typing:user:&lt;user_id&gt;</code></li>
+        <li>Each channel subscribes to its own user's typing topic on join</li>
+        <li>Broadcast = synchronous fan-out to all subscribers in the same BEAM node</li>
+      </ul>
+    </div>
+
+    <div class="detail-section">
+      <h3>⌨️ Typing Indicator Flow</h3>
+      <div class="code-block">
+<span class="cm"># Browser pushes on keydown:</span>
+channel.push(<span class="str">"typing"</span>, {to: recipientId})
+
+<span class="cm"># MessageChannel.handle_in("typing"):</span>
+from = socket.assigns.user_id
+Phoenix.PubSub.broadcast(MiniWa.PubSub,
+  <span class="str">"typing:user:#{to}"</span>,    <span class="cm"># recipient listens here</span>
+  {:typing, from, from}      <span class="cm"># conv_id = sender's id (for 1:1)</span>
+)
+
+<span class="cm"># Recipient's channel receives {:typing, from, conv_id}:</span>
+push(socket, <span class="str">"typing"</span>, %{from: from, conv_id: conv_id})
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <h3>🐛 The Typing Bug (and fix)</h3>
+      <p>Original bug: broadcast used <code>to</code> (recipient's id) as <code>conv_id</code>, but the recipient's <code>activeConv</code> holds the <em>sender's</em> id. The typing banner was never shown.</p>
+      <p><strong>Fix:</strong> Broadcast <code>{:typing, from, from}</code> — the third element (conv_id) is the sender's id, which matches what the recipient has in <code>activeConv</code>.</p>
+    </div>
+
+    <div class="detail-section">
+      <h3>🚫 Why Not Kafka for Typing?</h3>
+      <p>Typing indicators are ephemeral — if you miss one, nothing bad happens. Routing through Kafka would add 50–200ms of latency and burn unnecessary storage. PubSub delivers in microseconds with zero persistence overhead.</p>
+    </div>
+  `;
+
+  wrapper.appendChild(view);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Boot
+// ═══════════════════════════════════════════════════════════════════════════
+renderCurrent();
+</script>
+</body>
+</html>
