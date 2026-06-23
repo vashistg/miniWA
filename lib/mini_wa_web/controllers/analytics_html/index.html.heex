@@ -7,152 +7,99 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #0f1117;
-      color: #e2e8f0;
-      min-height: 100vh;
-    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; }
 
     /* ── Header ── */
-    header {
-      background: #1a1f2e;
-      border-bottom: 1px solid #2d3748;
-      padding: 14px 28px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
+    header { background: #1a1f2e; border-bottom: 1px solid #2d3748; padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
     .logo { font-size: 18px; font-weight: 700; color: #25D366; }
     .logo span { color: #e2e8f0; }
     .header-right { display: flex; align-items: center; gap: 16px; font-size: 12px; color: #718096; }
-    .live-dot {
-      width: 8px; height: 8px; border-radius: 50%; background: #25D366;
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-      0%,100% { opacity: 1; } 50% { opacity: 0.3; }
-    }
-    #last-updated { font-size: 12px; color: #4a5568; }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #25D366; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
 
-    /* ── Layout ── */
+    /* ── Tabs ── */
+    .tab-bar { background: #1a1f2e; border-bottom: 1px solid #2d3748; padding: 0 28px; display: flex; gap: 0; }
+    .tab { padding: 14px 20px; font-size: 13px; font-weight: 600; color: #718096; cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.2s, border-color 0.2s; }
+    .tab:hover { color: #e2e8f0; }
+    .tab.active { color: #25D366; border-bottom-color: #25D366; }
+
+    /* ── Panels ── */
+    .panel { display: none; }
+    .panel.active { display: block; }
     main { padding: 28px; max-width: 1280px; margin: 0 auto; }
+    .section-title { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: #4a5568; margin-bottom: 14px; }
 
-    .section-title {
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      color: #4a5568;
-      margin-bottom: 14px;
-    }
-
+    /* ── Cards ── */
     .row { display: grid; gap: 16px; margin-bottom: 24px; }
     .row-4 { grid-template-columns: repeat(4, 1fr); }
-    .row-5 { grid-template-columns: repeat(5, 1fr); }
     .row-2 { grid-template-columns: 1fr 1fr; }
-    .row-3 { grid-template-columns: 2fr 1fr 1fr; }
-
-    /* ── Stat card ── */
-    .card {
-      background: #1a1f2e;
-      border: 1px solid #2d3748;
-      border-radius: 12px;
-      padding: 20px;
-    }
-    .card-label {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: #718096;
-      margin-bottom: 8px;
-    }
-    .card-value {
-      font-size: 36px;
-      font-weight: 700;
-      line-height: 1;
-      margin-bottom: 6px;
-      font-variant-numeric: tabular-nums;
-    }
+    .card { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 12px; padding: 20px; }
+    .card-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #718096; margin-bottom: 8px; }
+    .card-value { font-size: 36px; font-weight: 700; line-height: 1; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
     .card-sub { font-size: 12px; color: #718096; }
     .card-accent-green  { border-left: 3px solid #25D366; }
     .card-accent-blue   { border-left: 3px solid #4299e1; }
     .card-accent-orange { border-left: 3px solid #ed8936; }
-    .card-accent-purple { border-left: 3px solid #9f7aea; }
-    .card-accent-red    { border-left: 3px solid #fc8181; }
     .card-accent-teal   { border-left: 3px solid #38b2ac; }
     .card-accent-yellow { border-left: 3px solid #ecc94b; }
 
-    /* ── Media breakdown inside a card ── */
+    /* ── Media bars ── */
     .media-bars { margin-top: 14px; }
-    .media-row  { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 12px; }
+    .media-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 12px; }
     .media-label { width: 46px; color: #a0aec0; }
     .media-bar-track { flex: 1; background: #2d3748; border-radius: 4px; height: 6px; overflow: hidden; }
-    .media-bar-fill  { height: 6px; border-radius: 4px; transition: width 0.5s ease; width: 0; }
-    .media-count  { width: 40px; text-align: right; color: #e2e8f0; font-variant-numeric: tabular-nums; }
-    .fill-green  { background: #25D366; }
-    .fill-blue   { background: #4299e1; }
-    .fill-purple { background: #9f7aea; }
-    .fill-orange { background: #ed8936; }
+    .media-bar-fill { height: 6px; border-radius: 4px; transition: width 0.5s ease; width: 0; }
+    .media-count { width: 40px; text-align: right; color: #e2e8f0; font-variant-numeric: tabular-nums; }
+    .fill-green { background: #25D366; } .fill-blue { background: #4299e1; } .fill-purple { background: #9f7aea; } .fill-orange { background: #ed8936; }
 
-    /* ── Latency grid ── */
+    /* ── Latency ── */
     .latency-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 4px; }
     .lat-cell { text-align: center; }
     .lat-label { font-size: 10px; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
     .lat-value { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .lat-unit  { font-size: 12px; color: #718096; }
-    .lat-p50 { color: #25D366; }
-    .lat-p95 { color: #ecc94b; }
-    .lat-p99 { color: #ed8936; }
-    .lat-mean { color: #4299e1; }
+    .lat-unit { font-size: 12px; color: #718096; }
+    .lat-p50 { color: #25D366; } .lat-p95 { color: #ecc94b; } .lat-p99 { color: #ed8936; } .lat-mean { color: #4299e1; }
 
-    /* ── Kafka lag card ── */
+    /* ── Kafka lag ── */
     .lag-rows { margin-top: 10px; }
-    .lag-row  { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-top: 1px solid #2d3748; font-size: 13px; }
+    .lag-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-top: 1px solid #2d3748; font-size: 13px; }
     .lag-group { color: #a0aec0; }
     .lag-value { font-weight: 700; font-variant-numeric: tabular-nums; }
-    .lag-ok   { color: #25D366; }
-    .lag-warn { color: #ecc94b; }
-    .lag-high { color: #fc8181; }
+    .lag-ok { color: #25D366; } .lag-warn { color: #ecc94b; } .lag-high { color: #fc8181; }
 
-    /* ── System health card ── */
+    /* ── Health ── */
     .health-rows { margin-top: 6px; }
     .health-row { display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid #2d3748; font-size: 13px; }
     .health-label { color: #a0aec0; }
-    .health-val   { font-weight: 700; font-variant-numeric: tabular-nums; }
+    .health-val { font-weight: 700; font-variant-numeric: tabular-nums; }
     .health-crash { color: #fc8181; }
 
     /* ── Charts ── */
-    .chart-card {
-      background: #1a1f2e;
-      border: 1px solid #2d3748;
-      border-radius: 12px;
-      padding: 20px;
-    }
+    .chart-card { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 12px; padding: 20px; }
     .chart-card h3 { font-size: 13px; font-weight: 600; color: #a0aec0; margin-bottom: 16px; }
-    .chart-wrap { position: relative; }
+    .badge-live { display: inline-block; background: rgba(37,211,102,0.15); color: #25D366; border: 1px solid rgba(37,211,102,0.3); border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; padding: 2px 7px; vertical-align: middle; margin-left: 8px; }
 
-    /* ── Loading / error ── */
-    .loading { color: #4a5568; font-size: 13px; text-align: center; padding: 40px; }
-    .badge-live {
-      display: inline-block;
-      background: rgba(37,211,102,0.15);
-      color: #25D366;
-      border: 1px solid rgba(37,211,102,0.3);
-      border-radius: 4px;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-      padding: 2px 7px;
-      vertical-align: middle;
-      margin-left: 8px;
-    }
+    /* ── Time-series controls ── */
+    .ts-controls { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+    .ts-controls label { font-size: 13px; color: #a0aec0; }
+    .ts-input { background: #1a1f2e; border: 1px solid #4a5568; border-radius: 8px; padding: 8px 12px; color: #e2e8f0; font-size: 13px; outline: none; }
+    .ts-input:focus { border-color: #25D366; }
+    .ts-btn { background: #25D366; color: #0f1117; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity 0.2s; }
+    .ts-btn:hover { opacity: 0.85; }
+
+    /* ── Time-series summary table ── */
+    .ts-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 20px; }
+    .ts-table th { text-align: left; padding: 8px 12px; background: #0f1117; color: #718096; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #2d3748; }
+    .ts-table td { padding: 10px 12px; border-bottom: 1px solid #1a1f2e; font-variant-numeric: tabular-nums; }
+    .ts-table tr:hover td { background: #1a1f2e; }
+    .ts-table td:first-child { color: #a0aec0; }
+    .ts-table td.num { text-align: right; }
+    .ts-table .no-data { text-align: center; color: #4a5568; padding: 32px; }
 
     @media (max-width: 900px) {
-      .row-4, .row-5 { grid-template-columns: 1fr 1fr; }
-      .row-2, .row-3 { grid-template-columns: 1fr; }
+      .row-4 { grid-template-columns: 1fr 1fr; }
+      .row-2 { grid-template-columns: 1fr; }
+      .latency-grid { grid-template-columns: 1fr 1fr; }
     }
   </style>
 </head>
@@ -161,295 +108,339 @@
 <header>
   <div class="logo">mini<span>WA</span> Analytics</div>
   <div class="header-right">
-    <div class="live-dot"></div>
-    <span>Live — refreshes every 5s</span>
-    <span id="last-updated"></span>
+    <div class="live-dot" id="live-dot"></div>
+    <span id="live-label">Live — refreshes every 5s</span>
+    <span id="last-updated" style="color:#4a5568;font-size:12px;"></span>
     <a href="/" style="color:#4299e1;font-size:12px;text-decoration:none;">← Back to chat</a>
   </div>
 </header>
 
+<div class="tab-bar">
+  <div class="tab active" onclick="switchTab('live')">Live</div>
+  <div class="tab" onclick="switchTab('hourly')">Hourly</div>
+  <div class="tab" onclick="switchTab('daily')">Daily</div>
+</div>
+
+<!-- ══════════════════════ LIVE TAB ══════════════════════ -->
+<div id="panel-live" class="panel active">
 <main>
 
-  <!-- ── Row 1: Message counts ── -->
   <div class="section-title">Messages</div>
   <div class="row row-4" style="margin-bottom:24px;">
-
     <div class="card card-accent-green">
       <div class="card-label">Total Messages</div>
       <div class="card-value" id="total-msgs">—</div>
       <div class="card-sub" id="current-rpm">— msg/min</div>
     </div>
-
     <div class="card card-accent-blue" style="grid-column: span 2;">
       <div class="card-label">Media Breakdown</div>
       <div class="media-bars">
-        <div class="media-row">
-          <div class="media-label">📝 Text</div>
-          <div class="media-bar-track"><div class="media-bar-fill fill-green" id="bar-text"></div></div>
-          <div class="media-count" id="count-text">0</div>
-        </div>
-        <div class="media-row">
-          <div class="media-label">🖼 Image</div>
-          <div class="media-bar-track"><div class="media-bar-fill fill-blue" id="bar-image"></div></div>
-          <div class="media-count" id="count-image">0</div>
-        </div>
-        <div class="media-row">
-          <div class="media-label">🎵 Audio</div>
-          <div class="media-bar-track"><div class="media-bar-fill fill-purple" id="bar-audio"></div></div>
-          <div class="media-count" id="count-audio">0</div>
-        </div>
-        <div class="media-row">
-          <div class="media-label">🎬 Video</div>
-          <div class="media-bar-track"><div class="media-bar-fill fill-orange" id="bar-video"></div></div>
-          <div class="media-count" id="count-video">0</div>
-        </div>
+        <div class="media-row"><div class="media-label">📝 Text</div><div class="media-bar-track"><div class="media-bar-fill fill-green" id="bar-text"></div></div><div class="media-count" id="count-text">0</div></div>
+        <div class="media-row"><div class="media-label">🖼 Image</div><div class="media-bar-track"><div class="media-bar-fill fill-blue" id="bar-image"></div></div><div class="media-count" id="count-image">0</div></div>
+        <div class="media-row"><div class="media-label">🎵 Audio</div><div class="media-bar-track"><div class="media-bar-fill fill-purple" id="bar-audio"></div></div><div class="media-count" id="count-audio">0</div></div>
+        <div class="media-row"><div class="media-label">🎬 Video</div><div class="media-bar-track"><div class="media-bar-fill fill-orange" id="bar-video"></div></div><div class="media-count" id="count-video">0</div></div>
       </div>
     </div>
-
-    <div class="card card-accent-purple">
+    <div class="card card-accent-teal">
       <div class="card-label">Latency Samples</div>
       <div class="card-value" id="latency-count">—</div>
-      <div class="card-sub">recorded so far</div>
+      <div class="card-sub">since server start</div>
     </div>
-
   </div>
 
-  <!-- ── Row 2: Latency stats ── -->
   <div class="section-title">E2E Latency (ws → Kafka ACK)</div>
-  <div class="row" style="grid-template-columns: 1fr; margin-bottom: 24px;">
+  <div class="row" style="margin-bottom:24px;">
     <div class="card card-accent-teal">
       <div class="latency-grid">
-        <div class="lat-cell">
-          <div class="lat-label">P50</div>
-          <div class="lat-value lat-p50" id="lat-p50">—</div>
-          <div class="lat-unit">ms</div>
-        </div>
-        <div class="lat-cell">
-          <div class="lat-label">P95</div>
-          <div class="lat-value lat-p95" id="lat-p95">—</div>
-          <div class="lat-unit">ms</div>
-        </div>
-        <div class="lat-cell">
-          <div class="lat-label">P99</div>
-          <div class="lat-value lat-p99" id="lat-p99">—</div>
-          <div class="lat-unit">ms</div>
-        </div>
-        <div class="lat-cell">
-          <div class="lat-label">Mean</div>
-          <div class="lat-value lat-mean" id="lat-mean">—</div>
-          <div class="lat-unit">ms</div>
-        </div>
+        <div class="lat-cell"><div class="lat-label">P50</div><div class="lat-value lat-p50" id="lat-p50">—</div><div class="lat-unit">ms</div></div>
+        <div class="lat-cell"><div class="lat-label">P95</div><div class="lat-value lat-p95" id="lat-p95">—</div><div class="lat-unit">ms</div></div>
+        <div class="lat-cell"><div class="lat-label">P99</div><div class="lat-value lat-p99" id="lat-p99">—</div><div class="lat-unit">ms</div></div>
+        <div class="lat-cell"><div class="lat-label">Mean</div><div class="lat-value lat-mean" id="lat-mean">—</div><div class="lat-unit">ms</div></div>
       </div>
     </div>
   </div>
 
-  <!-- ── Row 3: System health + Kafka lag ── -->
   <div class="section-title">System Health</div>
   <div class="row row-2" style="margin-bottom:24px;">
-
     <div class="card card-accent-orange">
       <div class="card-label">Process Health</div>
       <div class="health-rows">
-        <div class="health-row">
-          <span class="health-label">Active Sessions (online users)</span>
-          <span class="health-val" id="active-sessions">—</span>
-        </div>
-        <div class="health-row">
-          <span class="health-label">Total Session Starts</span>
-          <span class="health-val" id="session-starts">—</span>
-        </div>
-        <div class="health-row">
-          <span class="health-label">Session Crashes (non-normal exits)</span>
-          <span class="health-val health-crash" id="session-crashes">—</span>
-        </div>
+        <div class="health-row"><span class="health-label">Active Sessions (online users)</span><span class="health-val" id="active-sessions">—</span></div>
+        <div class="health-row"><span class="health-label">Total Session Starts</span><span class="health-val" id="session-starts">—</span></div>
+        <div class="health-row"><span class="health-label">Session Crashes (non-normal exits)</span><span class="health-val health-crash" id="session-crashes">—</span></div>
       </div>
     </div>
-
     <div class="card card-accent-yellow">
       <div class="card-label">Kafka Consumer Lag</div>
-      <div class="card-sub" style="margin-bottom:4px;font-size:11px;">messages behind latest offset</div>
+      <div class="card-sub" style="margin-bottom:4px;font-size:11px;">messages behind latest offset · polled every 30s</div>
       <div class="lag-rows">
-        <div class="lag-row">
-          <span class="lag-group">Delivery consumer (mini_wa_consumer_group)</span>
-          <span class="lag-value" id="lag-main">—</span>
-        </div>
-        <div class="lag-row">
-          <span class="lag-group">Analytics consumer (mini_wa_analytics_group)</span>
-          <span class="lag-value" id="lag-analytics">—</span>
-        </div>
+        <div class="lag-row"><span class="lag-group">Delivery consumer</span><span class="lag-value" id="lag-main">—</span></div>
+        <div class="lag-row"><span class="lag-group">Analytics consumer</span><span class="lag-value" id="lag-analytics">—</span></div>
       </div>
-      <div style="margin-top:10px;font-size:11px;color:#4a5568;">Polled every 30 s</div>
     </div>
-
   </div>
 
-  <!-- ── Row 4: Charts ── -->
   <div class="section-title">Trends</div>
   <div class="row row-2">
-
     <div class="chart-card">
       <h3>Messages / Minute <span class="badge-live">LIVE</span></h3>
-      <div class="chart-wrap" style="height:200px;">
-        <canvas id="rate-chart"></canvas>
-      </div>
+      <div style="position:relative;height:200px;"><canvas id="rate-chart"></canvas></div>
     </div>
-
     <div class="chart-card">
-      <h3>Latency Distribution — last 100 messages</h3>
-      <div class="chart-wrap" style="height:200px;">
-        <canvas id="latency-chart"></canvas>
-      </div>
+      <h3>Latency — last 100 messages</h3>
+      <div style="position:relative;height:200px;"><canvas id="latency-chart"></canvas></div>
     </div>
-
   </div>
 
 </main>
+</div>
+
+<!-- ══════════════════════ HOURLY TAB ══════════════════════ -->
+<div id="panel-hourly" class="panel">
+<main>
+  <div class="ts-controls">
+    <label>Date:</label>
+    <input type="date" id="hourly-date" class="ts-input">
+    <button class="ts-btn" onclick="loadHourly()">Load</button>
+  </div>
+
+  <div class="row row-2" style="margin-bottom:24px;">
+    <div class="chart-card" style="grid-column: span 2;">
+      <h3 id="hourly-chart-title">Messages per Hour</h3>
+      <div style="position:relative;height:280px;"><canvas id="hourly-chart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <h3>Hour-by-Hour Breakdown</h3>
+    <table class="ts-table" id="hourly-table">
+      <thead><tr><th>Hour</th><th style="text-align:right">Total</th><th style="text-align:right">Text</th><th style="text-align:right">Image</th><th style="text-align:right">Audio</th><th style="text-align:right">Video</th><th style="text-align:right">Avg Latency</th></tr></thead>
+      <tbody id="hourly-tbody"><tr><td colspan="7" class="no-data">Select a date and click Load</td></tr></tbody>
+    </table>
+  </div>
+</main>
+</div>
+
+<!-- ══════════════════════ DAILY TAB ══════════════════════ -->
+<div id="panel-daily" class="panel">
+<main>
+  <div class="ts-controls">
+    <label>Month:</label>
+    <input type="month" id="daily-month" class="ts-input">
+    <button class="ts-btn" onclick="loadDaily()">Load</button>
+  </div>
+
+  <div class="row row-2" style="margin-bottom:24px;">
+    <div class="chart-card" style="grid-column: span 2;">
+      <h3 id="daily-chart-title">Messages per Day</h3>
+      <div style="position:relative;height:280px;"><canvas id="daily-chart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <h3>Day-by-Day Breakdown</h3>
+    <table class="ts-table" id="daily-table">
+      <thead><tr><th>Date</th><th style="text-align:right">Total</th><th style="text-align:right">Text</th><th style="text-align:right">Image</th><th style="text-align:right">Audio</th><th style="text-align:right">Video</th><th style="text-align:right">Avg Latency</th></tr></thead>
+      <tbody id="daily-tbody"><tr><td colspan="7" class="no-data">Select a month and click Load</td></tr></tbody>
+    </table>
+  </div>
+</main>
+</div>
 
 <script>
-  // ─── Chart setup ───────────────────────────────────────────────────────────
+  // ─── Chart defaults ─────────────────────────────────────────────────────────
   Chart.defaults.color = '#718096';
   Chart.defaults.borderColor = '#2d3748';
 
-  const rateCtx = document.getElementById('rate-chart').getContext('2d');
-  const rateChart = new Chart(rateCtx, {
+  // ─── Tab switching ──────────────────────────────────────────────────────────
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach((t, i) => {
+      t.classList.toggle('active', ['live','hourly','daily'][i] === name);
+    });
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + name).classList.add('active');
+
+    const dot = document.getElementById('live-dot');
+    const lbl = document.getElementById('live-label');
+    if (name === 'live') {
+      dot.style.display = '';
+      lbl.textContent = 'Live — refreshes every 5s';
+    } else {
+      dot.style.display = 'none';
+      lbl.textContent = '';
+    }
+  }
+
+  // ─── Live charts ────────────────────────────────────────────────────────────
+  const rateChart = new Chart(document.getElementById('rate-chart').getContext('2d'), {
     type: 'bar',
-    data: {
-      labels: [],
-      datasets: [{
-        label: 'msgs/min',
-        data: [],
-        backgroundColor: 'rgba(37,211,102,0.25)',
-        borderColor: '#25D366',
-        borderWidth: 1,
-        borderRadius: 3,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: { duration: 400 },
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { grid: { color: '#1a1f2e' }, ticks: { font: { size: 10 } } },
-        y: { grid: { color: '#2d3748' }, beginAtZero: true, ticks: { font: { size: 10 }, precision: 0 } }
-      }
-    }
+    data: { labels: [], datasets: [{ label: 'msgs/min', data: [], backgroundColor: 'rgba(37,211,102,0.25)', borderColor: '#25D366', borderWidth: 1, borderRadius: 3 }] },
+    options: { responsive: true, maintainAspectRatio: false, animation: { duration: 400 }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1a1f2e' }, ticks: { font: { size: 10 } } }, y: { grid: { color: '#2d3748' }, beginAtZero: true, ticks: { font: { size: 10 }, precision: 0 } } } }
   });
 
-  const latCtx = document.getElementById('latency-chart').getContext('2d');
-  const latChart = new Chart(latCtx, {
+  const latChart = new Chart(document.getElementById('latency-chart').getContext('2d'), {
     type: 'line',
-    data: {
-      labels: [],
-      datasets: [{
-        label: 'ws+kafka (ms)',
-        data: [],
-        borderColor: '#38b2ac',
-        backgroundColor: 'rgba(56,178,172,0.1)',
-        borderWidth: 1.5,
-        pointRadius: 0,
-        fill: true,
-        tension: 0.3,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: { duration: 300 },
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { display: false },
-        y: { grid: { color: '#2d3748' }, beginAtZero: true, ticks: { font: { size: 10 } } }
-      }
-    }
+    data: { labels: [], datasets: [{ label: 'ws+kafka (ms)', data: [], borderColor: '#38b2ac', backgroundColor: 'rgba(56,178,172,0.1)', borderWidth: 1.5, pointRadius: 0, fill: true, tension: 0.3 }] },
+    options: { responsive: true, maintainAspectRatio: false, animation: { duration: 300 }, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: '#2d3748' }, beginAtZero: true, ticks: { font: { size: 10 } } } } }
   });
 
-  // ─── Helpers ───────────────────────────────────────────────────────────────
-  function setText(id, val, fallback = '—') {
+  // ─── Hourly chart ───────────────────────────────────────────────────────────
+  const hourlyChart = new Chart(document.getElementById('hourly-chart').getContext('2d'), {
+    data: {
+      labels: Array.from({length: 24}, (_, i) => String(i).padStart(2,'0') + ':00'),
+      datasets: [
+        { type: 'bar', label: 'Messages', data: new Array(24).fill(0), backgroundColor: 'rgba(37,211,102,0.3)', borderColor: '#25D366', borderWidth: 1, borderRadius: 3, yAxisID: 'y' },
+        { type: 'line', label: 'Avg Latency (ms)', data: new Array(24).fill(null), borderColor: '#38b2ac', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y1', spanGaps: false }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, animation: { duration: 400 }, plugins: { legend: { position: 'top', labels: { color: '#a0aec0', font: { size: 11 } } } }, scales: { x: { grid: { color: '#1a1f2e' }, ticks: { font: { size: 10 } } }, y: { grid: { color: '#2d3748' }, beginAtZero: true, position: 'left', ticks: { font: { size: 10 }, precision: 0 }, title: { display: true, text: 'Messages', color: '#4a5568', font: { size: 10 } } }, y1: { grid: { drawOnChartArea: false }, beginAtZero: true, position: 'right', ticks: { font: { size: 10 } }, title: { display: true, text: 'Latency (ms)', color: '#4a5568', font: { size: 10 } } } } }
+  });
+
+  // ─── Daily chart ────────────────────────────────────────────────────────────
+  const dailyChart = new Chart(document.getElementById('daily-chart').getContext('2d'), {
+    data: {
+      labels: [],
+      datasets: [
+        { type: 'bar', label: 'Messages', data: [], backgroundColor: 'rgba(66,153,225,0.3)', borderColor: '#4299e1', borderWidth: 1, borderRadius: 3, yAxisID: 'y' },
+        { type: 'line', label: 'Avg Latency (ms)', data: [], borderColor: '#ed8936', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 4, tension: 0.3, yAxisID: 'y1', spanGaps: false }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, animation: { duration: 400 }, plugins: { legend: { position: 'top', labels: { color: '#a0aec0', font: { size: 11 } } } }, scales: { x: { grid: { color: '#1a1f2e' }, ticks: { font: { size: 10 } } }, y: { grid: { color: '#2d3748' }, beginAtZero: true, position: 'left', ticks: { font: { size: 10 }, precision: 0 } }, y1: { grid: { drawOnChartArea: false }, beginAtZero: true, position: 'right', ticks: { font: { size: 10 } } } } }
+  });
+
+  // ─── Live refresh helpers ────────────────────────────────────────────────────
+  function setText(id, val, fb = '—') {
     const el = document.getElementById(id);
-    if (el) el.textContent = (val !== null && val !== undefined) ? val : fallback;
+    if (el) el.textContent = (val !== null && val !== undefined) ? val : fb;
   }
-
-  function lagClass(val) {
-    if (val === null || val === undefined) return '';
-    if (val === 0)   return 'lag-ok';
-    if (val < 100)   return 'lag-warn';
-    return 'lag-high';
-  }
-
-  function setLag(id, val) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.className = 'lag-value ' + lagClass(val);
-    el.textContent = (val !== null && val !== undefined) ? val : 'N/A';
-  }
-
-  function setBar(barId, countId, count, total) {
+  function setBar(barId, cntId, count, total) {
     const pct = total > 0 ? Math.round((count / total) * 100) : 0;
     const bar = document.getElementById(barId);
     if (bar) bar.style.width = pct + '%';
-    setText(countId, count, '0');
+    setText(cntId, count, '0');
+  }
+  function setLag(id, val) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const cls = val === null ? '' : val === 0 ? 'lag-ok' : val < 100 ? 'lag-warn' : 'lag-high';
+    el.className = 'lag-value ' + cls;
+    el.textContent = val !== null ? val : 'N/A';
   }
 
-  // ─── Fetch & render ────────────────────────────────────────────────────────
-  async function refresh() {
-    let data;
-    try {
-      const res = await fetch('/api/analytics');
-      if (!res.ok) return;
-      data = await res.json();
-    } catch (_) { return; }
-
-    const total = data.total || 0;
-
-    // Message counts
+  async function refreshLive() {
+    let d;
+    try { const r = await fetch('/api/analytics'); if (!r.ok) return; d = await r.json(); } catch(_) { return; }
+    const total = d.total || 0;
     setText('total-msgs', total.toLocaleString());
-    setText('current-rpm', (data.rate?.current_rpm ?? 0) + ' msg/min');
-    setText('latency-count', data.latency?.count ?? 0);
-
-    setBar('bar-text',  'count-text',  data.text  || 0, total);
-    setBar('bar-image', 'count-image', data.image || 0, total);
-    setBar('bar-audio', 'count-audio', data.audio || 0, total);
-    setBar('bar-video', 'count-video', data.video || 0, total);
-
-    // Latency
-    const lat = data.latency || {};
-    setText('lat-p50',  lat.p50);
-    setText('lat-p95',  lat.p95);
-    setText('lat-p99',  lat.p99);
-    setText('lat-mean', lat.mean);
-
-    // System health
-    setText('active-sessions',  data.active_sessions);
-    setText('session-starts',   data.session_starts);
-    setText('session-crashes',  data.session_crashes);
-
-    // Kafka lag
-    setLag('lag-main',      data.kafka_lag_main);
-    setLag('lag-analytics', data.kafka_lag_analytics);
-
-    // Rate chart (last 20 minutes, ascending)
-    const perMin = (data.rate?.per_minute || [])
-      .filter(b => b.minutes_ago <= 20)
-      .sort((a, b) => b.minutes_ago - a.minutes_ago);
-
-    rateChart.data.labels   = perMin.map(b => b.minutes_ago === 0 ? 'now' : `-${b.minutes_ago}m`);
+    setText('current-rpm', (d.rate?.current_rpm ?? 0) + ' msg/min');
+    setText('latency-count', d.latency?.count ?? 0);
+    setBar('bar-text',  'count-text',  d.text  || 0, total);
+    setBar('bar-image', 'count-image', d.image || 0, total);
+    setBar('bar-audio', 'count-audio', d.audio || 0, total);
+    setBar('bar-video', 'count-video', d.video || 0, total);
+    const lat = d.latency || {};
+    setText('lat-p50', lat.p50); setText('lat-p95', lat.p95); setText('lat-p99', lat.p99); setText('lat-mean', lat.mean);
+    setText('active-sessions', d.active_sessions); setText('session-starts', d.session_starts); setText('session-crashes', d.session_crashes);
+    setLag('lag-main', d.kafka_lag_main); setLag('lag-analytics', d.kafka_lag_analytics);
+    const perMin = (d.rate?.per_minute || []).filter(b => b.minutes_ago <= 20).sort((a,b) => b.minutes_ago - a.minutes_ago);
+    rateChart.data.labels = perMin.map(b => b.minutes_ago === 0 ? 'now' : `-${b.minutes_ago}m`);
     rateChart.data.datasets[0].data = perMin.map(b => b.count);
     rateChart.update('none');
-
-    // Latency sparkline (samples are newest-first, show oldest→newest)
     const samples = (lat.samples || []).slice().reverse();
-    latChart.data.labels   = samples.map((_, i) => i + 1);
+    latChart.data.labels = samples.map((_,i) => i+1);
     latChart.data.datasets[0].data = samples;
     latChart.update('none');
-
-    // Timestamp
     setText('last-updated', 'Updated ' + new Date().toLocaleTimeString());
   }
 
-  // ─── Boot ──────────────────────────────────────────────────────────────────
-  refresh();
-  setInterval(refresh, 5000);
+  // ─── Hourly load ────────────────────────────────────────────────────────────
+  async function loadHourly() {
+    const date = document.getElementById('hourly-date').value;
+    if (!date) return;
+    let d;
+    try { const r = await fetch('/api/analytics/hourly?date=' + date); if (!r.ok) return; d = await r.json(); } catch(_) { return; }
+
+    document.getElementById('hourly-chart-title').textContent = 'Messages per Hour — ' + date;
+
+    // Build 24-slot arrays
+    const byHour = {};
+    (d.data || []).forEach(row => { byHour[row.hour] = row; });
+    const msgs = [], lats = [];
+    for (let h = 0; h < 24; h++) {
+      const row = byHour[h];
+      msgs.push(row ? (row.total || 0) : 0);
+      lats.push(row && row.lat_cnt > 0 ? Math.round(row.lat_sum / row.lat_cnt) : null);
+    }
+    hourlyChart.data.datasets[0].data = msgs;
+    hourlyChart.data.datasets[1].data = lats;
+    hourlyChart.update();
+
+    // Table
+    const tbody = document.getElementById('hourly-tbody');
+    if ((d.data || []).length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="no-data">No data for ' + date + '</td></tr>';
+      return;
+    }
+    tbody.innerHTML = Array.from({length:24}, (_,h) => {
+      const row = byHour[h] || {};
+      const total = row.total || 0;
+      const avgLat = row.lat_cnt > 0 ? Math.round(row.lat_sum / row.lat_cnt) + ' ms' : '—';
+      return `<tr>
+        <td>${String(h).padStart(2,'0')}:00</td>
+        <td class="num">${total}</td>
+        <td class="num">${row.text_c || 0}</td>
+        <td class="num">${row.image_c || 0}</td>
+        <td class="num">${row.audio_c || 0}</td>
+        <td class="num">${row.video_c || 0}</td>
+        <td class="num">${avgLat}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ─── Daily load ─────────────────────────────────────────────────────────────
+  async function loadDaily() {
+    const month = document.getElementById('daily-month').value;
+    if (!month) return;
+    let d;
+    try { const r = await fetch('/api/analytics/daily?month=' + month); if (!r.ok) return; d = await r.json(); } catch(_) { return; }
+
+    document.getElementById('daily-chart-title').textContent = 'Messages per Day — ' + month;
+
+    const rows = (d.data || []).sort((a,b) => a.day.localeCompare(b.day));
+    dailyChart.data.labels = rows.map(r => r.day.slice(8)); // just the day number
+    dailyChart.data.datasets[0].data = rows.map(r => r.total || 0);
+    dailyChart.data.datasets[1].data = rows.map(r => r.lat_cnt > 0 ? Math.round(r.lat_sum / r.lat_cnt) : null);
+    dailyChart.update();
+
+    const tbody = document.getElementById('daily-tbody');
+    if (rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="no-data">No data for ' + month + '</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(row => {
+      const avgLat = row.lat_cnt > 0 ? Math.round(row.lat_sum / row.lat_cnt) + ' ms' : '—';
+      return `<tr>
+        <td>${row.day}</td>
+        <td class="num">${row.total || 0}</td>
+        <td class="num">${row.text_c || 0}</td>
+        <td class="num">${row.image_c || 0}</td>
+        <td class="num">${row.audio_c || 0}</td>
+        <td class="num">${row.video_c || 0}</td>
+        <td class="num">${avgLat}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ─── Init ───────────────────────────────────────────────────────────────────
+  // Set default date/month inputs to today
+  const now = new Date();
+  const todayStr  = now.toISOString().slice(0, 10);
+  const monthStr  = now.toISOString().slice(0, 7);
+  document.getElementById('hourly-date').value = todayStr;
+  document.getElementById('daily-month').value  = monthStr;
+
+  refreshLive();
+  setInterval(refreshLive, 5000);
 </script>
 </body>
 </html>

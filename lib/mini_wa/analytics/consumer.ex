@@ -69,13 +69,14 @@ defmodule MiniWa.Analytics.Consumer do
   # ─── Private ───────────────────────────────────────────────────────────────
 
   defp record_metrics(payload) do
-    MiniWa.Analytics.Store.record_message(payload["media_type"])
-
     client_sent_at        = payload["client_sent_at"]
     kafka_published_at_ms = payload["kafka_published_at_ms"]
 
-    if is_integer(client_sent_at) && is_integer(kafka_published_at_ms) do
-      MiniWa.Analytics.Store.record_latency(kafka_published_at_ms - client_sent_at)
-    end
+    latency_ms =
+      if is_integer(client_sent_at) && is_integer(kafka_published_at_ms) do
+        kafka_published_at_ms - client_sent_at
+      end
+
+    MiniWa.Analytics.Store.record_message(payload["media_type"], latency_ms)
   end
 end

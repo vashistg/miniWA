@@ -86,6 +86,43 @@ defmodule Mix.Tasks.MiniWa.Db.Setup do
        group_name text,
        PRIMARY KEY (user_id, group_id)
      )
+     """},
+    {"analytics_counters — global lifetime totals (counter table)",
+     """
+     CREATE TABLE IF NOT EXISTS mini_wa.analytics_counters (
+       name  text PRIMARY KEY,
+       value counter
+     )
+     """},
+    {"analytics_hourly — per-hour breakdown (counter table, partition: day)",
+     """
+     CREATE TABLE IF NOT EXISTS mini_wa.analytics_hourly (
+       day     text,
+       hour    int,
+       total   counter,
+       text_c  counter,
+       image_c counter,
+       audio_c counter,
+       video_c counter,
+       lat_sum counter,
+       lat_cnt counter,
+       PRIMARY KEY (day, hour)
+     ) WITH CLUSTERING ORDER BY (hour ASC)
+     """},
+    {"analytics_daily — per-day breakdown (counter table, partition: month)",
+     """
+     CREATE TABLE IF NOT EXISTS mini_wa.analytics_daily (
+       month   text,
+       day     text,
+       total   counter,
+       text_c  counter,
+       image_c counter,
+       audio_c counter,
+       video_c counter,
+       lat_sum counter,
+       lat_cnt counter,
+       PRIMARY KEY (month, day)
+     ) WITH CLUSTERING ORDER BY (day ASC)
      """}
   ]
 
@@ -124,6 +161,9 @@ defmodule Mix.Tasks.MiniWa.Db.Setup do
       mini_wa.groups               — group metadata
       mini_wa.group_members        — membership (partition: group_id)
       mini_wa.user_groups          — user→group index (partition: user_id)
+      mini_wa.analytics_counters   — global lifetime counters (counter table)
+      mini_wa.analytics_hourly     — per-hour message stats (partition: day)
+      mini_wa.analytics_daily      — per-day message stats  (partition: month)
     """)
 
     GenServer.stop(conn)

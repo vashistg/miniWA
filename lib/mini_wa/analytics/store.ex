@@ -9,31 +9,34 @@ defmodule MiniWa.Analytics.Store do
 
   def start_link(_), do: GenServer.start_link(__MODULE__, [], name: __MODULE__)
 
-  # Called by analytics consumer for every Kafka message — uses atomic ETS ops
-  # so it never blocks on the GenServer.
-  def record_message(media_type) do
-    safe_counter_update(:total_messages)
+  # Called by the analytics Kafka consumer for every message.
+  # ETS counters are updated synchronously (atomic, microseconds).
+  # ScyllaDB write is fire-and-forget in a separate task.
+  def record_message(media_type, latency_ms \\ nil) do
+    safe_counter(:total_messages)
     case media_type do
-      "image" -> safe_counter_update(:media_image)
-      "audio" -> safe_counter_update(:media_audio)
-      "video" -> safe_counter_update(:media_video)
-      _       -> safe_counter_update(:text_only)
+      "image" -> safe_counter(:media_image)
+      "audio" -> safe_counter(:media_audio)
+      "video" -> safe_counter(:media_video)
+      _       -> safe_counter(:text_only)
+    end
+    if is_integer(latency_ms) && latency_ms >= 0 do
+      GenServer.cast(__MODULE__, {:add_latency, latency_ms})
     end
     GenServer.cast(__MODULE__, {:bump_rate, System.system_time(:millisecond)})
+    Task.start(fn -> MiniWa.Analytics.DB.record_message(media_type, latency_ms) end)
   end
 
-  def record_latency(ms) when is_integer(ms) and ms >= 0 do
-    GenServer.cast(__MODULE__, {:add_latency, ms})
-  end
-  def record_latency(_), do: :ok
-
+  # Called from Session.init/1 — direct ETS + async ScyllaDB.
   def record_session_start do
-    safe_counter_update(:session_starts)
+    safe_counter(:session_starts)
+    Task.start(fn -> MiniWa.Analytics.DB.record_session_event(:start) end)
   end
 
-  # Only called on non-normal terminations from Session.terminate/2.
+  # Called from Session.terminate/2 on non-normal exits.
   def record_crash do
-    safe_counter_update(:session_crashes)
+    safe_counter(:session_crashes)
+    Task.start(fn -> MiniWa.Analytics.DB.record_session_event(:crash) end)
   end
 
   def record_kafka_lag(group, lag) when is_integer(lag) do
@@ -49,39 +52,38 @@ defmodule MiniWa.Analytics.Store do
 
   @impl true
   def init(_) do
-    table = :ets.new(@table, [:named_table, :public, :set])
-    :ets.insert(table, [
-      {:total_messages, 0},
-      {:media_image,    0},
-      {:media_audio,    0},
-      {:media_video,    0},
-      {:text_only,      0},
-      {:session_starts,   0},
-      {:session_crashes,  0},
+    :ets.new(@table, [:named_table, :public, :set])
+    :ets.insert(@table, [
+      {:total_messages,    0},
+      {:media_image,       0},
+      {:media_audio,       0},
+      {:media_video,       0},
+      {:text_only,         0},
+      {:session_starts,    0},
+      {:session_crashes,   0},
       {:kafka_lag_main,      nil},
       {:kafka_lag_analytics, nil},
-      {:latency_samples, []},
-      {:rate_buckets,    %{}}
+      {:latency_samples,   []},
+      {:rate_buckets,      %{}}
     ])
+    seed_from_scylla()
     {:ok, %{}}
   end
 
   @impl true
   def handle_cast({:add_latency, ms}, state) do
     [{_, samples}] = :ets.lookup(@table, :latency_samples)
-    updated = Enum.take([ms | samples], @max_latency_samples)
-    :ets.insert(@table, {:latency_samples, updated})
+    :ets.insert(@table, {:latency_samples, Enum.take([ms | samples], @max_latency_samples)})
     {:noreply, state}
   end
 
   @impl true
   def handle_cast({:bump_rate, ts_ms}, state) do
-    bucket = div(ts_ms, 60_000)
+    bucket  = div(ts_ms, 60_000)
     [{_, buckets}] = :ets.lookup(@table, :rate_buckets)
-    updated  = Map.update(buckets, bucket, 1, &(&1 + 1))
-    cutoff   = bucket - @rate_window_minutes
-    trimmed  = Map.reject(updated, fn {k, _} -> k < cutoff end)
-    :ets.insert(@table, {:rate_buckets, trimmed})
+    updated = Map.update(buckets, bucket, 1, &(&1 + 1))
+    cutoff  = bucket - @rate_window_minutes
+    :ets.insert(@table, {:rate_buckets, Map.reject(updated, fn {k, _} -> k < cutoff end)})
     {:noreply, state}
   end
 
@@ -106,7 +108,25 @@ defmodule MiniWa.Analytics.Store do
 
   # ─── Private ───────────────────────────────────────────────────────────────
 
-  defp safe_counter_update(key) do
+  # Seed ETS counters from ScyllaDB so they survive server restarts.
+  defp seed_from_scylla do
+    persisted = MiniWa.Analytics.DB.load_counters()
+    unless map_size(persisted) == 0 do
+      :ets.insert(@table, [
+        {:total_messages,  Map.get(persisted, "total",           0)},
+        {:media_image,     Map.get(persisted, "image_c",         0)},
+        {:media_audio,     Map.get(persisted, "audio_c",         0)},
+        {:media_video,     Map.get(persisted, "video_c",         0)},
+        {:text_only,       Map.get(persisted, "text_c",          0)},
+        {:session_starts,  Map.get(persisted, "session_starts",  0)},
+        {:session_crashes, Map.get(persisted, "session_crashes", 0)}
+      ])
+    end
+  rescue
+    _ -> :ok
+  end
+
+  defp safe_counter(key) do
     :ets.update_counter(@table, key, 1)
   rescue
     _ -> :ok
@@ -142,8 +162,7 @@ defmodule MiniWa.Analytics.Store do
   end
 
   defp percentile(sorted, n, pct) do
-    idx = max(0, round(pct * n) - 1)
-    Enum.at(sorted, idx)
+    Enum.at(sorted, max(0, round(pct * n) - 1))
   end
 
   defp compute_rate(buckets) when map_size(buckets) == 0 do
@@ -154,9 +173,7 @@ defmodule MiniWa.Analytics.Store do
     per_minute =
       buckets
       |> Enum.sort_by(fn {k, _} -> k end)
-      |> Enum.map(fn {bucket, count} ->
-        %{minutes_ago: now_bucket - bucket, count: count}
-      end)
+      |> Enum.map(fn {bucket, count} -> %{minutes_ago: now_bucket - bucket, count: count} end)
     current_rpm = Map.get(buckets, now_bucket, 0) + Map.get(buckets, now_bucket - 1, 0)
     %{per_minute: per_minute, current_rpm: current_rpm}
   end
