@@ -1,5 +1,21 @@
 import Config
 
+# Load .env from the server directory
+env_path = Path.expand("../.env", __DIR__)
+
+if File.exists?(env_path) do
+  env_path
+  |> File.read!()
+  |> String.split("\n", trim: true)
+  |> Enum.reject(&(String.starts_with?(&1, "#") or &1 == ""))
+  |> Enum.each(fn line ->
+    case String.split(line, "=", parts: 2) do
+      [k, v] -> System.put_env(String.trim(k), String.trim(v))
+      _ -> :ok
+    end
+  end)
+end
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #
