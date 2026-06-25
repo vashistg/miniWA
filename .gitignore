@@ -35,3 +35,9 @@ mini_wa-*.tar
 npm-debug.log
 /assets/node_modules/
 
+# Environment variables — never commit secrets
+.env
+
+# Agent-generated HTML files (runtime output)
+/priv/static/agent_files/
+
